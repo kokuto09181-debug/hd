@@ -62,7 +62,7 @@ struct SettingsView: View {
 
                 if llm.downloadState == .downloading {
                     ProgressView(value: llm.downloadProgress)
-                        .tint(.tint)
+                        .tint(Color.accentColor)
                     Text("\(Int(llm.downloadProgress * 100))% ダウンロード中…")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
