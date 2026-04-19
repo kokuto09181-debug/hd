@@ -3,6 +3,7 @@ import SwiftData
 
 @Model
 final class MealPlan {
+    var id: UUID = UUID()
     var startDate: Date
     var endDate: Date
     var status: MealPlanStatus

@@ -100,7 +100,7 @@ final class MealPlanEngine {
     // MARK: - Shopping List Generation
 
     func generateShoppingList(from plan: MealPlan, context: ModelContext) -> ShoppingList {
-        let list = ShoppingList(mealPlanID: plan.persistentModelID.id as! UUID)
+        let list = ShoppingList(mealPlanID: plan.id)
         context.insert(list)
 
         var aggregated: [String: AggregatedIngredient] = [:]

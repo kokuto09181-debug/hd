@@ -3,8 +3,8 @@ import SwiftData
 
 struct ShoppingListView: View {
     @Query(sort: \ShoppingList.generatedAt, order: .reverse) private var lists: [ShoppingList]
-    @Query(filter: #Predicate<MealPlan> { $0.status == "確定" },
-           sort: \MealPlan.startDate, order: .reverse) private var confirmedPlans: [MealPlan]
+    @Query(sort: \MealPlan.startDate, order: .reverse) private var allPlans: [MealPlan]
+    private var confirmedPlans: [MealPlan] { allPlans.filter { $0.status == .confirmed } }
     @Environment(\.modelContext) private var context
     @State private var showingGenerateConfirm = false
 

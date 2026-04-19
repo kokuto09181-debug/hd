@@ -154,8 +154,8 @@ private struct FoodLogRow: View {
 struct FoodLogAddView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
-    @Query(filter: #Predicate<MealPlan> { $0.status == "確定" },
-           sort: \MealPlan.startDate, order: .reverse) private var plans: [MealPlan]
+    @Query(sort: \MealPlan.startDate, order: .reverse) private var allPlans: [MealPlan]
+    private var plans: [MealPlan] { allPlans.filter { $0.status == .confirmed } }
 
     @State private var recipeName = ""
     @State private var calories = ""
