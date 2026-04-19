@@ -62,21 +62,8 @@ final class LLMService: ObservableObject {
         defer { isLoading = false }
 
         let system = buildSystemPrompt(for: context)
-        let messages: [[String: String]] = [
-            ["role": "system", "content": system],
-            ["role": "user", "content": prompt],
-        ]
-
-        let output = try await container.perform { [messages] ctx in
-            let input = try await ctx.processor.prepare(input: .init(messages: messages))
-            let result = try generate(
-                input: input,
-                parameters: GenerateParameters(temperature: 0.7),
-                context: ctx
-            ) { _ in .more }
-            return result.output
-        }
-        return output
+        let session = ChatSession(container, instructions: system)
+        return try await session.respond(to: prompt)
     }
 
     private func buildSystemPrompt(for context: LLMContext) -> String {

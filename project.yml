@@ -7,7 +7,7 @@ options:
 packages:
   mlx-swift-examples:
     url: https://github.com/ml-explore/mlx-swift-examples
-    branch: main
+    exactVersion: "2.25.9"
 
 targets:
   HealthDiary:
