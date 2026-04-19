@@ -168,8 +168,19 @@ struct DashboardView: View {
                 .font(.headline)
 
             HStack(spacing: 12) {
-                QuickActionButton(label: "食事を記録", systemImage: "camera.fill", color: .pink)
-                QuickActionButton(label: "献立を作る", systemImage: "calendar.badge.plus", color: .teal)
+                NavigationLink {
+                    FoodLogView()
+                } label: {
+                    QuickActionButton(label: "食事を記録", systemImage: "camera.fill", color: .pink)
+                }
+                .buttonStyle(.plain)
+
+                NavigationLink {
+                    ShoppingListView()
+                } label: {
+                    QuickActionButton(label: "買い出しリスト", systemImage: "cart.fill", color: .teal)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
