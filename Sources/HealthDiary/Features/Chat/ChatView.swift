@@ -227,7 +227,7 @@ struct ChatThreadView: View {
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.title2)
-                    .foregroundStyle(inputText.isEmpty ? .secondary : .tint)
+                    .foregroundStyle(inputText.isEmpty ? Color.secondary : Color.accentColor)
             }
             .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty || llm.isLoading)
         }
