@@ -1,0 +1,32 @@
+name: HealthDiary
+options:
+  bundleIdPrefix: com.healthdiary
+  deploymentTarget:
+    iOS: "17.0"
+
+targets:
+  HealthDiary:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - Sources/HealthDiary
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.healthdiary.app
+        SWIFT_VERSION: 5.9
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_FILE: Sources/HealthDiary/Info.plist
+    entitlements:
+      path: Sources/HealthDiary/HealthDiary.entitlements
+
+  HealthDiaryTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests/HealthDiaryTests
+    dependencies:
+      - target: HealthDiary
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.healthdiary.app.tests

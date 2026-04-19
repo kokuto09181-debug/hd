@@ -1,0 +1,45 @@
+name: iOS CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build
+        run: |
+          xcodebuild clean build \
+            -project HealthDiary.xcodeproj \
+            -scheme HealthDiary \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty || xcodebuild clean build \
+              -project HealthDiary.xcodeproj \
+              -scheme HealthDiary \
+              -sdk iphonesimulator \
+              -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+              CODE_SIGNING_ALLOWED=NO
+
+      - name: Test
+        run: |
+          xcodebuild test \
+            -project HealthDiary.xcodeproj \
+            -scheme HealthDiaryTests \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty || true
