@@ -1,0 +1,51 @@
+{
+  "identifier": "com.healthdiary.storekit",
+  "nonConsumableProducts": [],
+  "nonRenewingSubscriptions": [],
+  "products": [],
+  "settings": {
+    "_failTransactionsEnabled": false,
+    "_locale": "ja_JP",
+    "_storefront": "JPN",
+    "_storeKitErrors": []
+  },
+  "subscriptionGroups": [
+    {
+      "id": "premium_group",
+      "localizations": [
+        {
+          "description": "全機能アンロック",
+          "displayName": "プレミアム",
+          "locale": "ja_JP"
+        }
+      ],
+      "name": "Premium",
+      "subscriptions": [
+        {
+          "adHocOffers": [],
+          "displayPrice": "500",
+          "familySharable": false,
+          "groupNumber": 1,
+          "internalID": "96F59BF5-39FD-4B1A-A04B-50A3EE6E9E39",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "広告なし・全機能アンロック・オンデバイスAI",
+              "displayName": "月額プレミアム",
+              "locale": "ja_JP"
+            }
+          ],
+          "productID": "com.healthdiary.app.premium.monthly",
+          "referenceName": "Monthly Premium",
+          "recurringSubscriptionPeriod": "P1M",
+          "subscriptionGroupID": "premium_group",
+          "type": "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version": {
+    "major": 2,
+    "minor": 0
+  }
+}

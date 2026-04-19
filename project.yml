@@ -4,6 +4,11 @@ options:
   deploymentTarget:
     iOS: "17.0"
 
+packages:
+  mlx-swift-examples:
+    url: https://github.com/ml-explore/mlx-swift-examples
+    branch: main
+
 targets:
   HealthDiary:
     type: application
@@ -19,6 +24,11 @@ targets:
         INFOPLIST_FILE: Sources/HealthDiary/Info.plist
     entitlements:
       path: Sources/HealthDiary/HealthDiary.entitlements
+    dependencies:
+      - package: mlx-swift-examples
+        product: MLXLLM
+      - package: mlx-swift-examples
+        product: MLXLMCommon
 
   HealthDiaryTests:
     type: bundle.unit-test
