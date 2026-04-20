@@ -61,10 +61,10 @@ jobs:
       - name: Package IPA
         run: |
           BUILD_DIR="$(pwd)/build-device"
-          APP=$(find "$BUILD_DIR" -name "HealthDiary.app" -path "*/iphoneos*" | head -1)
-          if [ -z "$APP" ]; then
-            echo "ERROR: HealthDiary.app not found"
-            find "$BUILD_DIR" -name "*.app" 2>/dev/null
+          APP="$BUILD_DIR/Debug-iphoneos/HealthDiary.app"
+          if [ ! -d "$APP" ]; then
+            echo "ERROR: HealthDiary.app not found at $APP"
+            ls -la "$BUILD_DIR/" 2>/dev/null || true
             exit 1
           fi
           echo "Found: $APP"
