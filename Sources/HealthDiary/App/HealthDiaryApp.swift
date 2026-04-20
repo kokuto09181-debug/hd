@@ -13,6 +13,10 @@ struct HealthDiaryApp: App {
                     if !onboardingCompleted {
                         showOnboarding = true
                     }
+                    // バックグラウンドで LLM モデルを自動ダウンロード
+                    Task {
+                        await LLMService.shared.autoDownloadIfNeeded()
+                    }
                 }
                 .fullScreenCover(isPresented: $showOnboarding) {
                     OnboardingView(isPresented: $showOnboarding)

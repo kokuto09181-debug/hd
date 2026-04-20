@@ -6,6 +6,7 @@ struct MealPlanCreationView: View {
     @Environment(\.dismiss) private var dismiss
     @Query private var history: [MealHistoryEntry]
     @Query private var profiles: [FamilyProfile]
+    @Query private var allPlans: [MealPlan]
 
     @State private var startDate = Date()
     @State private var numberOfDays = 7
@@ -18,9 +19,13 @@ struct MealPlanCreationView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("期間") {
-                    DatePicker("開始日", selection: $startDate, displayedComponents: .date)
+                Section("開始日") {
+                    DatePicker("", selection: $startDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .labelsHidden()
+                }
 
+                Section("期間") {
                     Stepper(value: $numberOfDays, in: 2...14) {
                         HStack {
                             Text("日数")
@@ -29,7 +34,6 @@ struct MealPlanCreationView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-
                     HStack {
                         Text("終了日")
                         Spacer()
@@ -95,6 +99,11 @@ struct MealPlanCreationView: View {
             weekend: MealType.allCases.filter { weekendSlots.contains($0) }
         )
         Task {
+            // 既存の確定プランを全てドラフトに戻す（履歴として残る）
+            for old in allPlans where old.status == .confirmed {
+                old.status = .draft
+            }
+
             let plan = engine.generatePlan(
                 startDate: startDate,
                 numberOfDays: numberOfDays,

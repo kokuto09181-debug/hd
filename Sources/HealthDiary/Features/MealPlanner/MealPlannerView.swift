@@ -199,6 +199,10 @@ private struct MealSlotRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 36, alignment: .leading)
 
+            // ビジュアルアイコン
+            Text(visualEmoji)
+                .font(.title2)
+
             VStack(alignment: .leading, spacing: 2) {
                 switch meal.mealOption {
                 case .homeCooked:
@@ -225,5 +229,22 @@ private struct MealSlotRow: View {
             }
         }
         .padding(.vertical, 2)
+    }
+
+    private var visualEmoji: String {
+        if meal.mealOption == .skipped { return "⏭️" }
+        if meal.mealOption == .diningOut { return "🍴" }
+        let name = meal.recipeName ?? ""
+        if name.contains("肉") || name.contains("ステーキ") || name.contains("焼肉") { return "🥩" }
+        if name.contains("魚") || name.contains("刺身") || name.contains("寿司") { return "🐟" }
+        if name.contains("麺") || name.contains("パスタ") || name.contains("ラーメン") { return "🍜" }
+        if name.contains("カレー") { return "🍛" }
+        if name.contains("サラダ") { return "🥗" }
+        if name.contains("スープ") || name.contains("汁") { return "🍲" }
+        if name.contains("丼") || name.contains("ご飯") { return "🍚" }
+        if name.contains("パン") { return "🍞" }
+        if name.contains("卵") || name.contains("オムレツ") { return "🍳" }
+        if name.isEmpty { return "❓" }
+        return "🍽️"
     }
 }

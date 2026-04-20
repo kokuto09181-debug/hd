@@ -12,7 +12,8 @@ final class LLMService: ObservableObject {
     @Published var downloadState: ModelDownloadState = .notDownloaded
 
     private var modelContainer: ModelContainer?
-    private let modelID = "mlx-community/gemma-4-e2b-it-4bit"
+    // Qwen2.5 1.5B 4bit: ~1GB, supports Japanese well, fast on iPhone
+    private let modelID = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
     private let downloadedKey = "llm_model_downloaded"
 
     private init() {}
@@ -31,6 +32,17 @@ final class LLMService: ObservableObject {
             downloadState = .notDownloaded
             UserDefaults.standard.removeObject(forKey: downloadedKey)
         }
+    }
+
+    // Called from HealthDiaryApp on first launch — downloads in background
+    func autoDownloadIfNeeded() async {
+        guard !isModelLoaded else { return }
+        guard downloadState == .notDownloaded else { return }
+        guard !UserDefaults.standard.bool(forKey: downloadedKey) else {
+            await loadModelIfNeeded()
+            return
+        }
+        await downloadModel()
     }
 
     func downloadModel() async {
@@ -56,7 +68,7 @@ final class LLMService: ObservableObject {
 
     func generate(prompt: String, context: LLMContext) async throws -> String {
         guard let container = modelContainer else {
-            return "AIモデルが読み込まれていません。設定画面からダウンロードしてください。"
+            return "AIモデルがまだ読み込まれていません。しばらくお待ちください。"
         }
         isLoading = true
         defer { isLoading = false }

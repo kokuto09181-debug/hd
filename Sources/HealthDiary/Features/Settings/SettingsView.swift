@@ -6,13 +6,8 @@ struct SettingsView: View {
     @State private var showingPaywall = false
     @State private var isDownloading = false
 
-    private var canUseAI: Bool {
-        #if DEBUG
-        return true
-        #else
-        return store.isPremium
-        #endif
-    }
+    // AIモデルは全ユーザー無料。初回起動時に自動ダウンロード開始。
+    private var canUseAI: Bool { true }
 
     var body: some View {
         List {
@@ -61,7 +56,7 @@ struct SettingsView: View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("Gemma 4 E2B (4-bit量子化)")
+                    Text("Qwen 2.5 1.5B (4-bit量子化)")
                     Spacer()
                     Text(llm.downloadState.description)
                         .font(.caption)
