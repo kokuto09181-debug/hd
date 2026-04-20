@@ -27,3 +27,4 @@ Pods/
 
 # macOS
 .DS_Store
+.env
