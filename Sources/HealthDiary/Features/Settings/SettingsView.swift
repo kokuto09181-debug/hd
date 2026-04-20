@@ -56,7 +56,7 @@ struct SettingsView: View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("Qwen 2.5 1.5B (4-bit量子化)")
+                    Text("Gemma 4 E2B (4-bit量子化)")
                     Spacer()
                     Text(llm.downloadState.description)
                         .font(.caption)

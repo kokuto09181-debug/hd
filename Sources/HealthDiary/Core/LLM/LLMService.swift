@@ -12,8 +12,8 @@ final class LLMService: ObservableObject {
     @Published var downloadState: ModelDownloadState = .notDownloaded
 
     private var modelContainer: ModelContainer?
-    // Qwen2.5 1.5B 4bit: ~1GB, supports Japanese well, fast on iPhone
-    private let modelID = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
+    // Gemma 4 E2B 4bit: Google's latest 2B-effective model (~1GB), supports Japanese
+    private let modelID = "mlx-community/gemma-4-e2b-it-4bit"
     private let downloadedKey = "llm_model_downloaded"
 
     private init() {}
