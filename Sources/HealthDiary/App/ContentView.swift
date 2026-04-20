@@ -22,7 +22,7 @@ struct ContentView: View {
             }
             .tabItem { Label("設定", systemImage: "gearshape.fill") }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .safeAreaInset(edge: .top, spacing: 0) {
             if !store.isPremium {
                 AdBannerPlaceholder()
             }
