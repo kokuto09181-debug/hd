@@ -3,9 +3,20 @@ import SwiftData
 
 @main
 struct HealthDiaryApp: App {
+    @AppStorage("onboarding_completed") private var onboardingCompleted = false
+    @State private var showOnboarding = false
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .onAppear {
+                    if !onboardingCompleted {
+                        showOnboarding = true
+                    }
+                }
+                .fullScreenCover(isPresented: $showOnboarding) {
+                    OnboardingView(isPresented: $showOnboarding)
+                }
         }
         .modelContainer(for: [
             FamilyProfile.self,

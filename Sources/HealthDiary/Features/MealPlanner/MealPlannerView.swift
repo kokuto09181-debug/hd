@@ -87,6 +87,22 @@ struct MealPlanDetailView: View {
                 DayPlanView(dayPlan: sortedDays[selectedDayIndex])
             }
         }
+        .gesture(
+            DragGesture(minimumDistance: 40)
+                .onEnded { value in
+                    if value.translation.width < -40 {
+                        // 左スワイプ → 次の日
+                        if selectedDayIndex < sortedDays.count - 1 {
+                            withAnimation { selectedDayIndex += 1 }
+                        }
+                    } else if value.translation.width > 40 {
+                        // 右スワイプ → 前の日
+                        if selectedDayIndex > 0 {
+                            withAnimation { selectedDayIndex -= 1 }
+                        }
+                    }
+                }
+        )
     }
 
     private var daySelector: some View {

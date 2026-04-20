@@ -232,19 +232,16 @@ private struct QuickActionButton: View {
     let color: Color
 
     var body: some View {
-        Button {} label: {
-            VStack(spacing: 8) {
-                Image(systemName: systemImage)
-                    .font(.title2)
-                    .foregroundStyle(color)
-                Text(label)
-                    .font(.caption)
-                    .foregroundStyle(.primary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        VStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.title2)
+                .foregroundStyle(color)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.primary)
         }
-        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .padding()
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
     }
 }

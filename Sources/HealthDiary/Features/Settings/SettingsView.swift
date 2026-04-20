@@ -6,6 +6,14 @@ struct SettingsView: View {
     @State private var showingPaywall = false
     @State private var isDownloading = false
 
+    private var canUseAI: Bool {
+        #if DEBUG
+        return true
+        #else
+        return store.isPremium
+        #endif
+    }
+
     var body: some View {
         List {
             subscriptionSection
@@ -53,7 +61,7 @@ struct SettingsView: View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("Gemma 3 4B (4-bit量子化)")
+                    Text("Gemma 4 E2B (4-bit量子化)")
                     Spacer()
                     Text(llm.downloadState.description)
                         .font(.caption)
@@ -67,7 +75,7 @@ struct SettingsView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 } else if llm.downloadState != .ready {
-                    if store.isPremium {
+                    if canUseAI {
                         Button {
                             Task {
                                 isDownloading = true
@@ -79,7 +87,7 @@ struct SettingsView: View {
                                 .font(.subheadline)
                         }
                         .disabled(isDownloading)
-                        Text("約2GB · Wi-Fi推奨")
+                        Text("約1GB · Wi-Fi推奨")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     } else {

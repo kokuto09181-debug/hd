@@ -12,7 +12,7 @@ final class LLMService: ObservableObject {
     @Published var downloadState: ModelDownloadState = .notDownloaded
 
     private var modelContainer: ModelContainer?
-    private let modelID = "mlx-community/gemma-3-4b-it-4bit"
+    private let modelID = "mlx-community/gemma-4-e2b-it-4bit"
     private let downloadedKey = "llm_model_downloaded"
 
     private init() {}
