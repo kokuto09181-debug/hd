@@ -2,8 +2,6 @@ import Foundation
 import MLXLLM
 import MLXLMCommon
 import MLXHuggingFace
-import HuggingFace
-import Tokenizers
 
 @MainActor
 final class LLMService: ObservableObject {
