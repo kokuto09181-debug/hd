@@ -1,6 +1,9 @@
 import Foundation
 import MLXLLM
 import MLXLMCommon
+import MLXHuggingFace
+import HuggingFace
+import Tokenizers
 
 @MainActor
 final class LLMService: ObservableObject {
@@ -24,8 +27,10 @@ final class LLMService: ObservableObject {
         guard UserDefaults.standard.bool(forKey: downloadedKey) else { return }
         do {
             modelContainer = try await LLMModelFactory.shared.loadContainer(
+                from: #hubDownloader(),
+                using: #huggingFaceTokenizerLoader(),
                 configuration: ModelConfiguration(id: modelID)
-            ) { _ in }
+            )
             isModelLoaded = true
             downloadState = .ready
         } catch {
@@ -51,12 +56,15 @@ final class LLMService: ObservableObject {
         downloadProgress = 0
         do {
             let container = try await LLMModelFactory.shared.loadContainer(
-                configuration: ModelConfiguration(id: modelID)
-            ) { [weak self] progress in
-                Task { @MainActor [weak self] in
-                    self?.downloadProgress = progress.fractionCompleted
+                from: #hubDownloader(),
+                using: #huggingFaceTokenizerLoader(),
+                configuration: ModelConfiguration(id: modelID),
+                progressHandler: { [weak self] progress in
+                    Task { @MainActor [weak self] in
+                        self?.downloadProgress = progress.fractionCompleted
+                    }
                 }
-            }
+            )
             modelContainer = container
             isModelLoaded = true
             downloadState = .ready
