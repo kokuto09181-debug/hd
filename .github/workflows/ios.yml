@@ -37,17 +37,20 @@ jobs:
 
       - name: Build
         run: |
+          set -o pipefail
           xcodebuild clean build \
             -project HealthDiary.xcodeproj \
             -scheme HealthDiary \
             -sdk iphonesimulator \
             -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO \
             | xcpretty || xcodebuild clean build \
               -project HealthDiary.xcodeproj \
               -scheme HealthDiary \
               -sdk iphonesimulator \
               -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+              -skipMacroValidation \
               CODE_SIGNING_ALLOWED=NO
 
       - name: Test
