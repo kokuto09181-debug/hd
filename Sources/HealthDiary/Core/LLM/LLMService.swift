@@ -1,9 +1,13 @@
 import Foundation
-import MLXLLM
 import MLXLMCommon
+
+// MLX / HuggingFace macros require real hardware — exclude from simulator
+#if !targetEnvironment(simulator)
+import MLXLLM
 import MLXHuggingFace
 import HuggingFace
 import Tokenizers
+#endif
 
 @MainActor
 final class LLMService: ObservableObject {
@@ -14,7 +18,10 @@ final class LLMService: ObservableObject {
     @Published var downloadProgress: Double = 0
     @Published var downloadState: ModelDownloadState = .notDownloaded
 
+    #if !targetEnvironment(simulator)
     private var modelContainer: ModelContainer?
+    #endif
+
     // Gemma 4 E2B 4bit: Google's latest 2B-effective model (~1GB), supports Japanese
     private let modelID = "mlx-community/gemma-4-e2b-it-4bit"
     private let downloadedKey = "llm_model_downloaded"
@@ -25,6 +32,7 @@ final class LLMService: ObservableObject {
     func loadModelIfNeeded() async {
         guard !isModelLoaded else { return }
         guard UserDefaults.standard.bool(forKey: downloadedKey) else { return }
+        #if !targetEnvironment(simulator)
         do {
             modelContainer = try await LLMModelFactory.shared.loadContainer(
                 from: #hubDownloader(),
@@ -37,6 +45,9 @@ final class LLMService: ObservableObject {
             downloadState = .notDownloaded
             UserDefaults.standard.removeObject(forKey: downloadedKey)
         }
+        #else
+        downloadState = .error("シミュレーターでは利用不可")
+        #endif
     }
 
     // Called from HealthDiaryApp on first launch — downloads in background
@@ -51,6 +62,9 @@ final class LLMService: ObservableObject {
     }
 
     func downloadModel() async {
+        #if targetEnvironment(simulator)
+        downloadState = .error("シミュレーターでは利用不可")
+        #else
         guard downloadState != .downloading else { return }
         downloadState = .downloading
         downloadProgress = 0
@@ -72,18 +86,22 @@ final class LLMService: ObservableObject {
         } catch {
             downloadState = .error(error.localizedDescription)
         }
+        #endif
     }
 
     func generate(prompt: String, context: LLMContext) async throws -> String {
+        #if targetEnvironment(simulator)
+        return "シミュレーターではAIモデルを利用できません。実機でお試しください。"
+        #else
         guard let container = modelContainer else {
             return "AIモデルがまだ読み込まれていません。しばらくお待ちください。"
         }
         isLoading = true
         defer { isLoading = false }
-
         let system = buildSystemPrompt(for: context)
         let session = ChatSession(container, instructions: system)
         return try await session.respond(to: prompt)
+        #endif
     }
 
     private func buildSystemPrompt(for context: LLMContext) -> String {
