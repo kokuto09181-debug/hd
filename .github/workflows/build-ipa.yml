@@ -37,6 +37,7 @@ jobs:
       - name: Build for iOS Device (unsigned)
         run: |
           BUILD_DIR="$(pwd)/build-device"
+          set -o pipefail
           xcodebuild build \
             -project HealthDiary.xcodeproj \
             -scheme HealthDiary \
@@ -48,17 +49,7 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER="" \
             SKIP_INSTALL=NO \
             BUILD_DIR="$BUILD_DIR" \
-            | xcpretty || xcodebuild build \
-              -project HealthDiary.xcodeproj \
-              -scheme HealthDiary \
-              -sdk iphoneos \
-              -destination 'generic/platform=iOS' \
-              CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGN_IDENTITY="" \
-              CODE_SIGNING_REQUIRED=NO \
-              PROVISIONING_PROFILE_SPECIFIER="" \
-              SKIP_INSTALL=NO \
-              BUILD_DIR="$BUILD_DIR"
+            2>&1 | tee build.log || (cat build.log && exit 1)
 
       - name: Package IPA
         run: |
