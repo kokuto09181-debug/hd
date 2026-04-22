@@ -73,15 +73,44 @@ final class LLMService: ObservableObject {
     private func buildSystemPrompt(for context: LLMContext) -> String {
         switch context {
         case .recipe(let name, let ingredients):
+            if name.isEmpty {
+                return "料理・レシピの相談アシスタントです。日本語で簡潔に答えます。"
+            }
             return "料理アシスタントです。\(name)（\(ingredients.joined(separator: "、"))）について日本語で簡潔に答えます。"
         case .mealPlan(let days, let familySize):
-            return "\(familySize)人家族\(days)日分の献立提案をする日本語アシスタントです。"
-        case .leftover(let recipeName):
-            return "残り物活用アシスタントです。\(recipeName)を使ったアレンジを日本語で提案します。"
+            return "\(familySize)人家族の食事・献立相談アシスタントです。\(days)日分を目安に日本語で提案します。"
+        case .leftover(let recipeName, let pantryItems):
+            let pantryText = pantryItems.isEmpty ? "" : "\n冷蔵庫にある食材: \(pantryItems.joined(separator: "、"))"
+            if recipeName.isEmpty {
+                return "残り物・冷蔵庫にある食材を使ったレシピを提案する日本語アシスタントです。\(pantryText)"
+            }
+            return "残り物活用アシスタントです。\(recipeName)を使ったアレンジを日本語で提案します。\(pantryText)"
         case .health:
-            return "健康管理アシスタントです。日本語で簡潔に答えます。"
+            return "健康管理・栄養アドバイスの日本語アシスタントです。医療的診断はしません。"
         case .free:
             return "食事・健康管理アプリのアシスタントです。日本語で簡潔に答えます。"
+        case .foodAnalysis:
+            return "食事の画像認識結果から日本語の料理名と推定カロリーを答えてください。回答形式: 料理名|推定カロリー(kcal)　例: 炒飯|550"
+        }
+    }
+
+    /// ChatContext を LLMContext に変換する
+    static func fromChatContext(
+        _ chatContext: ChatContext,
+        profile: FamilyProfile?,
+        pantryItems: [String] = []
+    ) -> LLMContext {
+        switch chatContext {
+        case .recipe:
+            return .recipe(name: "", ingredients: [])
+        case .mealPlan:
+            return .mealPlan(days: 7, familySize: profile?.members.count ?? 1)
+        case .leftover:
+            return .leftover(recipeName: "", pantryItems: pantryItems)
+        case .health:
+            return .health
+        case .free:
+            return .free
         }
     }
 }
@@ -105,17 +134,8 @@ enum ModelDownloadState: Equatable {
 enum LLMContext {
     case recipe(name: String, ingredients: [String])
     case mealPlan(days: Int, familySize: Int)
-    case leftover(recipeName: String)
+    case leftover(recipeName: String, pantryItems: [String] = [])
     case health
     case free
-
-    var chatContext: ChatContext {
-        switch self {
-        case .recipe:   return .recipe
-        case .mealPlan: return .mealPlan
-        case .leftover: return .leftover
-        case .health:   return .health
-        case .free:     return .free
-        }
-    }
+    case foodAnalysis
 }

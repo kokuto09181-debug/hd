@@ -180,11 +180,16 @@ struct ChatThreadView: View {
     @Bindable var thread: ChatThread
     @StateObject private var llm = LLMService.shared
     @Environment(\.modelContext) private var context
+    @Query private var profiles: [FamilyProfile]
     @State private var inputText = ""
     @State private var scrollProxy: ScrollViewProxy? = nil
 
     private var sortedMessages: [ChatMessage] {
         thread.messages.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    private var llmContext: LLMContext {
+        LLMService.fromChatContext(thread.context, profile: profiles.first)
     }
 
     var body: some View {
@@ -213,7 +218,10 @@ struct ChatThreadView: View {
         }
         .navigationTitle(thread.title)
         .navigationBarTitleDisplayMode(.inline)
-        .task { await llm.loadModelIfNeeded() }
+        .task {
+            await llm.loadModelIfNeeded()
+            await autoRespondIfNeeded()
+        }
     }
 
     private var inputBar: some View {
@@ -246,7 +254,6 @@ struct ChatThreadView: View {
 
         Task {
             do {
-                let llmContext = LLMContext.free
                 let response = try await llm.generate(prompt: text, context: llmContext)
                 let assistantMsg = ChatMessage(role: .assistant, content: response)
                 context.insert(assistantMsg)
@@ -254,6 +261,21 @@ struct ChatThreadView: View {
                 thread.updatedAt = Date()
             } catch {}
         }
+    }
+
+    /// NewChatView から渡された初回メッセージに自動返答する
+    private func autoRespondIfNeeded() async {
+        // 最初の1件がユーザーメッセージのみ（未返答）の場合のみ実行
+        guard sortedMessages.count == 1,
+              let first = sortedMessages.first,
+              first.role == .user else { return }
+        do {
+            let response = try await llm.generate(prompt: first.content, context: llmContext)
+            let assistantMsg = ChatMessage(role: .assistant, content: response)
+            context.insert(assistantMsg)
+            thread.messages.append(assistantMsg)
+            thread.updatedAt = Date()
+        } catch {}
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy) {
