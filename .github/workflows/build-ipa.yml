@@ -1,9 +1,9 @@
 name: Build IPA
 
 on:
-  workflow_dispatch:   # GitHub Actions画面から手動実行
+  workflow_dispatch:
   push:
-    branches: [main]   # mainへのpushで自動ビルド（iOS CIと並列）
+    branches: [main]
 
 jobs:
   build-ipa:
@@ -21,6 +21,25 @@ jobs:
 
       - name: Create Recipe Database
         run: python3 scripts/create_db.py
+
+      - name: Download Gemma 4 Model (bundled into IPA)
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          pip3 install -q huggingface_hub
+          python3 - << 'EOF'
+          import os, sys
+          from huggingface_hub import snapshot_download
+          token = os.environ.get("HF_TOKEN") or None
+          print(f"Downloading model ({'with token' if token else 'anonymous'})...")
+          snapshot_download(
+              repo_id="mlx-community/gemma-4-e2b-it-4bit",
+              local_dir="Sources/HealthDiary/Resources/model",
+              token=token,
+              ignore_patterns=["*.md", "*.txt", "LICENSE*", ".gitattributes"],
+          )
+          print("Model downloaded successfully")
+          EOF
 
       - name: Install XcodeGen
         run: brew install xcodegen

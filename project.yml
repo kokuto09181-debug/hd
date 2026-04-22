@@ -8,9 +8,6 @@ packages:
   mlx-swift-lm:
     url: https://github.com/ml-explore/mlx-swift-lm
     exactVersion: "3.31.3"
-  swift-huggingface:
-    url: https://github.com/huggingface/swift-huggingface
-    from: "0.9.0"
   swift-transformers:
     url: https://github.com/huggingface/swift-transformers
     from: "1.3.0"
@@ -22,7 +19,11 @@ targets:
     platform: iOS
     deploymentTarget: "17.0"
     sources:
-      - Sources/HealthDiary
+      - path: Sources/HealthDiary
+        excludes:
+          - "Resources/model/**"
+      - path: Sources/HealthDiary/Resources/model
+        type: folder
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.healthdiary.app
@@ -38,8 +39,6 @@ targets:
         product: MLXLMCommon
       - package: mlx-swift-lm
         product: MLXHuggingFace
-      - package: swift-huggingface
-        product: HuggingFace
       - package: swift-transformers
         product: Tokenizers
 

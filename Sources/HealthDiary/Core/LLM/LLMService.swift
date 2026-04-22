@@ -1,11 +1,10 @@
 import Foundation
 import MLXLMCommon
 
-// MLX / HuggingFace macros require real hardware — exclude from simulator
+// MLX requires real Apple Silicon hardware — exclude macros from simulator
 #if !targetEnvironment(simulator)
 import MLXLLM
 import MLXHuggingFace
-import HuggingFace
 import Tokenizers
 #endif
 
@@ -15,78 +14,44 @@ final class LLMService: ObservableObject {
 
     @Published var isLoading = false
     @Published var isModelLoaded = false
-    @Published var downloadProgress: Double = 0
-    @Published var downloadState: ModelDownloadState = .notDownloaded
+    @Published var downloadState: ModelDownloadState = .notLoaded
 
     #if !targetEnvironment(simulator)
     private var modelContainer: ModelContainer?
     #endif
 
-    // Gemma 4 E2B 4bit: Google's latest 2B-effective model (~1GB), supports Japanese
-    private let modelID = "mlx-community/gemma-4-e2b-it-4bit"
-    private let downloadedKey = "llm_model_downloaded"
-
     private init() {}
 
-    // Called on ChatThreadView.task — silently loads from HF cache if available
+    // Load the bundled Gemma 4 model into memory
     func loadModelIfNeeded() async {
         guard !isModelLoaded else { return }
-        guard UserDefaults.standard.bool(forKey: downloadedKey) else { return }
-        #if !targetEnvironment(simulator)
-        do {
-            modelContainer = try await LLMModelFactory.shared.loadContainer(
-                from: #hubDownloader(),
-                using: #huggingFaceTokenizerLoader(),
-                configuration: ModelConfiguration(id: modelID)
-            )
-            isModelLoaded = true
-            downloadState = .ready
-        } catch {
-            downloadState = .notDownloaded
-            UserDefaults.standard.removeObject(forKey: downloadedKey)
-        }
-        #else
-        downloadState = .error("シミュレーターでは利用不可")
-        #endif
-    }
+        downloadState = .loading
 
-    // Called from HealthDiaryApp on first launch — downloads in background
-    func autoDownloadIfNeeded() async {
-        guard !isModelLoaded else { return }
-        guard downloadState == .notDownloaded else { return }
-        guard !UserDefaults.standard.bool(forKey: downloadedKey) else {
-            await loadModelIfNeeded()
+        #if !targetEnvironment(simulator)
+        // Model is bundled in the app — no network needed
+        let modelDir = Bundle.main.bundleURL.appendingPathComponent("model")
+        guard FileManager.default.fileExists(atPath: modelDir.path) else {
+            downloadState = .error("同梱モデルが見つかりません")
             return
         }
-        await downloadModel()
-    }
-
-    func downloadModel() async {
-        #if targetEnvironment(simulator)
-        downloadState = .error("シミュレーターでは利用不可")
-        #else
-        guard downloadState != .downloading else { return }
-        downloadState = .downloading
-        downloadProgress = 0
         do {
-            let container = try await LLMModelFactory.shared.loadContainer(
-                from: #hubDownloader(),
-                using: #huggingFaceTokenizerLoader(),
-                configuration: ModelConfiguration(id: modelID),
-                progressHandler: { [weak self] progress in
-                    Task { @MainActor [weak self] in
-                        self?.downloadProgress = progress.fractionCompleted
-                    }
-                }
+            modelContainer = try await LLMModelFactory.shared.loadContainer(
+                from: modelDir,
+                using: #huggingFaceTokenizerLoader()
             )
-            modelContainer = container
             isModelLoaded = true
             downloadState = .ready
-            UserDefaults.standard.set(true, forKey: downloadedKey)
         } catch {
             downloadState = .error(error.localizedDescription)
         }
+        #else
+        downloadState = .error("シミュレーターでは利用不可")
         #endif
+    }
+
+    // Called from HealthDiaryApp on launch
+    func autoDownloadIfNeeded() async {
+        await loadModelIfNeeded()
     }
 
     func generate(prompt: String, context: LLMContext) async throws -> String {
@@ -98,6 +63,7 @@ final class LLMService: ObservableObject {
         }
         isLoading = true
         defer { isLoading = false }
+
         let system = buildSystemPrompt(for: context)
         let session = ChatSession(container, instructions: system)
         return try await session.respond(to: prompt)
@@ -121,16 +87,16 @@ final class LLMService: ObservableObject {
 }
 
 enum ModelDownloadState: Equatable {
-    case notDownloaded
-    case downloading
+    case notLoaded
+    case loading
     case ready
     case error(String)
 
     var description: String {
         switch self {
-        case .notDownloaded: return "未ダウンロード"
-        case .downloading: return "ダウンロード中"
-        case .ready: return "使用可能"
+        case .notLoaded:  return "未読み込み"
+        case .loading:    return "読み込み中…"
+        case .ready:      return "使用可能"
         case .error(let msg): return "エラー: \(msg)"
         }
     }
@@ -145,11 +111,11 @@ enum LLMContext {
 
     var chatContext: ChatContext {
         switch self {
-        case .recipe: return .recipe
+        case .recipe:   return .recipe
         case .mealPlan: return .mealPlan
         case .leftover: return .leftover
-        case .health: return .health
-        case .free: return .free
+        case .health:   return .health
+        case .free:     return .free
         }
     }
 }

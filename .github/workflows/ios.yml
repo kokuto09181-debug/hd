@@ -23,6 +23,9 @@ jobs:
       - name: Create Recipe Database
         run: python3 scripts/create_db.py
 
+      - name: Create model directory placeholder (simulator — no model needed)
+        run: mkdir -p Sources/HealthDiary/Resources/model
+
       - name: Install XcodeGen
         run: brew install xcodegen
 

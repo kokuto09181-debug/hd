@@ -4,10 +4,6 @@ struct SettingsView: View {
     @StateObject private var store = StoreService.shared
     @StateObject private var llm = LLMService.shared
     @State private var showingPaywall = false
-    @State private var isDownloading = false
-
-    // AIモデルは全ユーザー無料。初回起動時に自動ダウンロード開始。
-    private var canUseAI: Bool { true }
 
     var body: some View {
         List {
@@ -54,53 +50,34 @@ struct SettingsView: View {
 
     private var aiModelSection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Gemma 4 E2B (4-bit量子化)")
-                    Spacer()
-                    Text(llm.downloadState.description)
-                        .font(.caption)
+            HStack {
+                Label("Gemma 4 E2B (4-bit量子化)", systemImage: "brain")
+                Spacer()
+                switch llm.downloadState {
+                case .loading:
+                    ProgressView()
+                        .scaleEffect(0.8)
+                case .ready:
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                case .error:
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                case .notLoaded:
+                    Image(systemName: "clock")
                         .foregroundStyle(.secondary)
-                }
-
-                if llm.downloadState == .downloading {
-                    ProgressView(value: llm.downloadProgress)
-                        .tint(Color.accentColor)
-                    Text("\(Int(llm.downloadProgress * 100))% ダウンロード中…")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                } else if llm.downloadState != .ready {
-                    if canUseAI {
-                        Button {
-                            Task {
-                                isDownloading = true
-                                await llm.downloadModel()
-                                isDownloading = false
-                            }
-                        } label: {
-                            Label("AIモデルをダウンロード", systemImage: "arrow.down.circle")
-                                .font(.subheadline)
-                        }
-                        .disabled(isDownloading)
-                        Text("約1GB · Wi-Fi推奨")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    } else {
-                        HStack(spacing: 6) {
-                            Image(systemName: "lock.fill")
-                                .foregroundStyle(.secondary)
-                            Text("プレミアム限定機能です")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
                 }
             }
-            .padding(.vertical, 4)
+
+            if case .error(let msg) = llm.downloadState {
+                Text(msg)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         } header: {
             Text("AIモデル")
         } footer: {
-            Text("オンデバイスで動作するため、一度ダウンロードすれば通信不要。プライバシーが守られます。")
+            Text("アプリに同梱されたオンデバイスモデルです。通信不要でプライバシーが守られます。")
         }
     }
 

@@ -28,3 +28,7 @@ Pods/
 # macOS
 .DS_Store
 .env
+
+# Bundled ML model (downloaded during CI, not committed)
+Sources/HealthDiary/Resources/model/**
+!Sources/HealthDiary/Resources/model/.gitkeep
