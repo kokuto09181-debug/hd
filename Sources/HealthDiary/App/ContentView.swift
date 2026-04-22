@@ -14,8 +14,8 @@ struct ContentView: View {
             FoodLogView()
                 .tabItem { Label("記録", systemImage: "camera") }
 
-            FamilyProfileView()
-                .tabItem { Label("家族", systemImage: "person.2.fill") }
+            ChatView()
+                .tabItem { Label("相談", systemImage: "message.fill") }
 
             NavigationStack {
                 SettingsView()

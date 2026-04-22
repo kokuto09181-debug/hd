@@ -33,10 +33,10 @@ struct DashboardView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     greetingSection
-                    activityRingsSection
                     calorieBalanceSection
                     todayMealsSection
                     quickActionsSection
+                    activityCompactCard
                 }
                 .padding()
             }
@@ -77,34 +77,34 @@ struct DashboardView: View {
         }
     }
 
-    private var activityRingsSection: some View {
-        DashboardCard(title: "活動", systemImage: "figure.run") {
-            HStack(spacing: 24) {
-                ActivityMetric(
-                    value: healthKit.todaySteps,
-                    label: "歩数",
-                    unit: "歩",
-                    color: .green
-                )
-                Divider().frame(height: 50)
-                ActivityMetric(
-                    value: Int(healthKit.todayActiveCalories),
-                    label: "消費",
-                    unit: "kcal",
-                    color: .orange
-                )
-                if let weight = healthKit.latestWeight {
-                    Divider().frame(height: 50)
+    private var activityCompactCard: some View {
+        NavigationLink {
+            ActivityLogView()
+        } label: {
+            DashboardCard(title: "活動", systemImage: "figure.walk") {
+                HStack(spacing: 20) {
                     ActivityMetric(
-                        value: Int(weight),
-                        label: "体重",
-                        unit: "kg",
-                        color: .blue
+                        value: healthKit.todaySteps,
+                        label: "歩数",
+                        unit: "歩",
+                        color: .green
                     )
+                    Divider().frame(height: 36)
+                    ActivityMetric(
+                        value: Int(healthKit.todayActiveCalories),
+                        label: "消費",
+                        unit: "kcal",
+                        color: .orange
+                    )
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                 }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
         }
+        .buttonStyle(.plain)
     }
 
     private var calorieBalanceSection: some View {
@@ -178,7 +178,7 @@ struct DashboardView: View {
                 NavigationLink {
                     ShoppingListView()
                 } label: {
-                    QuickActionButton(label: "買い出しリスト", systemImage: "cart.fill", color: .teal)
+                    QuickActionButton(label: "買い出し・パントリー", systemImage: "cart.fill", color: .teal)
                 }
                 .buttonStyle(.plain)
             }

@@ -7,6 +7,7 @@ struct SettingsView: View {
 
     var body: some View {
         List {
+            familySection
             subscriptionSection
             aiModelSection
             appInfoSection
@@ -19,6 +20,16 @@ struct SettingsView: View {
     }
 
     // MARK: - Sections
+
+    private var familySection: some View {
+        Section("家族") {
+            NavigationLink {
+                FamilyProfileView()
+            } label: {
+                Label("家族の設定", systemImage: "person.2.fill")
+            }
+        }
+    }
 
     private var subscriptionSection: some View {
         Section("サブスクリプション") {
