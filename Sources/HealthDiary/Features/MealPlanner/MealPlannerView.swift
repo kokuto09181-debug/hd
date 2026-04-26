@@ -345,7 +345,9 @@ private struct DayTab: View {
             .frame(width: 44, height: 52)
             .background(isSelected ? Color.accentColor : Color.clear)
             .foregroundStyle(
-                isSelected ? .white : (isPast ? .tertiary : .primary)
+                isSelected
+                    ? AnyShapeStyle(.white)
+                    : (isPast ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
             )
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
