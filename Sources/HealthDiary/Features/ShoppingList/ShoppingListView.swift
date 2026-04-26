@@ -4,7 +4,7 @@ import SwiftData
 struct ShoppingListView: View {
     @Query(sort: \ShoppingList.generatedAt, order: .reverse) private var lists: [ShoppingList]
     @Query(sort: \MealPlan.startDate, order: .reverse) private var allPlans: [MealPlan]
-    private var confirmedPlans: [MealPlan] { allPlans.filter { $0.status == .confirmed } }
+    private var confirmedPlans: [MealPlan] { allPlans.filter { $0.status == .shopping } }
     @Environment(\.modelContext) private var context
     @State private var showingGenerateConfirm = false
 

@@ -14,8 +14,18 @@ enum MealOption: String, Codable {
 }
 
 enum MealPlanStatus: String, Codable {
-    case draft = "下書き"
-    case confirmed = "確定"
+    case draft = "draft"
+    case shopping = "shopping"  // 買い出し済み（旧 .confirmed）
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode(String.self)
+        switch raw {
+        case "shopping", "確定", "confirmed": self = .shopping
+        case "draft", "下書き": self = .draft
+        default: self = .draft
+        }
+    }
 }
 
 enum CuisineType: String, Codable, CaseIterable {

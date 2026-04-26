@@ -18,7 +18,12 @@ struct DashboardView: View {
     }
 
     private var activeMealPlan: MealPlan? {
-        mealPlans.first { $0.status == .confirmed }
+        let today = Calendar.current.startOfDay(for: Date())
+        return mealPlans.first {
+            $0.status == .shopping &&
+            Calendar.current.startOfDay(for: $0.startDate) <= today &&
+            Calendar.current.startOfDay(for: $0.endDate) >= today
+        }
     }
 
     private var todayDayPlan: DayPlan? {

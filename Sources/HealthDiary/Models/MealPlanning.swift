@@ -9,6 +9,14 @@ final class MealPlan {
     var status: MealPlanStatus
     var createdAt: Date
     @Relationship(deleteRule: .cascade) var days: [DayPlan]
+    var generationConditions: [String] = []
+    var slotConfigWeekday: [String] = ["朝食", "夕食"]
+    var slotConfigWeekend: [String] = ["朝食", "昼食", "夕食"]
+
+    // 全日程が過去かどうか（ステータスとは別で計算）
+    var isCompleted: Bool {
+        endDate < Calendar.current.startOfDay(for: Date())
+    }
 
     init(startDate: Date, endDate: Date) {
         self.startDate = startDate
@@ -23,6 +31,11 @@ final class MealPlan {
 final class DayPlan {
     var date: Date
     @Relationship(deleteRule: .cascade) var meals: [PlannedMeal]
+
+    // その日が過去かどうか（変更不可の判断に使う）
+    var isPast: Bool {
+        date < Calendar.current.startOfDay(for: Date())
+    }
 
     init(date: Date) {
         self.date = date

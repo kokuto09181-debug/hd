@@ -155,7 +155,7 @@ struct FoodLogAddView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \MealPlan.startDate, order: .reverse) private var allPlans: [MealPlan]
-    private var plans: [MealPlan] { allPlans.filter { $0.status == .confirmed } }
+    private var plans: [MealPlan] { allPlans.filter { $0.status == .shopping } }
 
     @State private var recipeName = ""
     @State private var calories = ""
