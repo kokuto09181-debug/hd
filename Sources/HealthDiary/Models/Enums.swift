@@ -98,3 +98,9 @@ enum ChatRole: String, Codable {
     case user
     case assistant
 }
+
+enum PantrySource: String, Codable {
+    case shopping = "買い出しから"   // 買い出しチェック時に自動追加
+    case manual = "手動"             // ユーザーが直接追加
+    case leftover = "残り物"         // 残り物として記録
+}

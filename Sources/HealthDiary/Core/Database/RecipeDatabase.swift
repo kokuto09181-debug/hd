@@ -107,43 +107,6 @@ final class RecipeDatabase {
         return nil
     }
 
-    /// LLMプロンプト用に全レシピをランダム順で取得
-    func fetchAll(limit: Int = 150) -> [RecipeRecord] {
-        guard let db else { return [] }
-        let query = """
-            SELECT id, name, url, cuisine_type, main_ingredient, cooking_method,
-                   calories_per_serving, serving_size
-            FROM recipes
-            ORDER BY RANDOM()
-            LIMIT ?
-        """
-        var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK else { return [] }
-        defer { sqlite3_finalize(statement) }
-        sqlite3_bind_int(statement, 1, Int32(limit))
-        var recipes: [RecipeRecord] = []
-        while sqlite3_step(statement) == SQLITE_ROW {
-            if let record = parseRecipeRow(statement) { recipes.append(record) }
-        }
-        return recipes
-    }
-
-    /// IDでレシピを1件取得（JSONパース後の照合用）
-    func findByID(_ id: String) -> RecipeRecord? {
-        guard let db else { return nil }
-        let query = """
-            SELECT id, name, url, cuisine_type, main_ingredient, cooking_method,
-                   calories_per_serving, serving_size
-            FROM recipes WHERE id = ?
-        """
-        var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK else { return nil }
-        defer { sqlite3_finalize(statement) }
-        sqlite3_bind_text(statement, 1, id, -1, SQLITE_TRANSIENT)
-        if sqlite3_step(statement) == SQLITE_ROW { return parseRecipeRow(statement) }
-        return nil
-    }
-
     func fetchIngredients(for recipeID: String) -> [IngredientRecord] {
         guard let db else { return [] }
 

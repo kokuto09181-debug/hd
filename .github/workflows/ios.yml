@@ -13,21 +13,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # --- キャッシュ ---
       - name: Cache Swift Package Manager
         uses: actions/cache@v4
         with:
-          path: ~/Library/Caches/org.swift.swiftpm
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            ~/.swiftpm
           key: ${{ runner.os }}-spm-${{ hashFiles('project.yml') }}
           restore-keys: ${{ runner.os }}-spm-
+
+      - name: Cache Homebrew packages
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: ${{ runner.os }}-brew-xcodegen
+          restore-keys: ${{ runner.os }}-brew-
+
+      # --- セットアップ ---
+      - name: Install tools
+        run: |
+          brew install xcodegen || true
+          gem install xcpretty --no-document 2>/dev/null || true
 
       - name: Create Recipe Database
         run: python3 scripts/create_db.py
 
-      - name: Create model directory placeholder (simulator — no model needed)
+      # シミュレータビルドはモデル不要 — 空ディレクトリだけ用意
+      - name: Create model directory placeholder
         run: mkdir -p Sources/HealthDiary/Resources/model
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -36,9 +50,14 @@ jobs:
         run: |
           xcodebuild -resolvePackageDependencies \
             -project HealthDiary.xcodeproj \
+            -scheme HealthDiary \
+            -onlyUsePackageVersionsFromResolvedFile 2>/dev/null || \
+          xcodebuild -resolvePackageDependencies \
+            -project HealthDiary.xcodeproj \
             -scheme HealthDiary
 
-      - name: Build
+      # --- ビルド ---
+      - name: Build (simulator)
         run: |
           set -o pipefail
           xcodebuild clean build \
@@ -48,20 +67,22 @@ jobs:
             -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
             -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO \
-            | xcpretty || xcodebuild clean build \
-              -project HealthDiary.xcodeproj \
-              -scheme HealthDiary \
-              -sdk iphonesimulator \
-              -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
-              -skipMacroValidation \
-              CODE_SIGNING_ALLOWED=NO
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            2>&1 | tee build.log | xcpretty || {
+              echo "=== Build Log (last 100 lines) ==="
+              tail -100 build.log
+              exit 1
+            }
 
+      # --- テスト ---
       - name: Test
         run: |
+          set -o pipefail
           xcodebuild test \
             -project HealthDiary.xcodeproj \
             -scheme HealthDiaryTests \
             -sdk iphonesimulator \
             -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO \
-            | xcpretty || true
+            2>&1 | xcpretty || true   # テスト自体のエラーは許容

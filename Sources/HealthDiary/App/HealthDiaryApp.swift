@@ -36,6 +36,8 @@ struct HealthDiaryApp: App {
             ManualWorkout.self,
             ChatThread.self,
             ChatMessage.self,
+            PantryItem.self,
+            IngredientAlias.self,
         ])
     }
 }

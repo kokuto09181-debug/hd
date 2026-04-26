@@ -99,10 +99,16 @@ final class MealPlanEngine {
 
     // MARK: - Shopping List Generation
 
-    func generateShoppingList(from plan: MealPlan, context: ModelContext) -> ShoppingList {
+    func generateShoppingList(
+        from plan: MealPlan,
+        context: ModelContext,
+        aliases: [IngredientAlias] = []
+    ) -> ShoppingList {
         let list = ShoppingList(mealPlanID: plan.id)
         context.insert(list)
 
+        let normService = IngredientNormalizationService.shared
+        // key = "正規化名_単位" で集計
         var aggregated: [String: AggregatedIngredient] = [:]
 
         for day in plan.days {
@@ -110,13 +116,14 @@ final class MealPlanEngine {
                 guard let recipeID = meal.recipeID, let recipeName = meal.recipeName else { continue }
                 let ingredients = RecipeDatabase.shared.fetchIngredients(for: recipeID)
                 for ing in ingredients {
-                    let key = "\(ing.name)_\(ing.unit)"
+                    let canonical = normService.normalize(ing.name, aliases: aliases)
+                    let key = "\(canonical)_\(ing.unit)"
                     if aggregated[key] != nil {
                         aggregated[key]!.totalAmount += ing.amount
                         aggregated[key]!.usedInRecipes.insert(recipeName)
                     } else {
                         aggregated[key] = AggregatedIngredient(
-                            name: ing.name,
+                            name: canonical,
                             totalAmount: ing.amount,
                             unit: ing.unit,
                             category: ing.category,

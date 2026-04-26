@@ -3,7 +3,7 @@ name: Build IPA
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [ main ]
 
 jobs:
   build-ipa:
@@ -12,23 +12,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # --- キャッシュ ---
       - name: Cache Swift Package Manager
         uses: actions/cache@v4
         with:
-          path: ~/Library/Caches/org.swift.swiftpm
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            ~/.swiftpm
           key: ${{ runner.os }}-spm-${{ hashFiles('project.yml') }}
           restore-keys: ${{ runner.os }}-spm-
 
-      - name: Create Recipe Database
-        run: python3 scripts/create_db.py
+      - name: Cache Homebrew packages
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: ${{ runner.os }}-brew-xcodegen
+          restore-keys: ${{ runner.os }}-brew-
 
-      - name: Download Gemma 4 Model (bundled into IPA)
+      # Gemma モデルキャッシュ（モデルバージョンが変わらない限り再ダウンロード不要）
+      - name: Cache Gemma model
+        id: model-cache
+        uses: actions/cache@v4
+        with:
+          path: Sources/HealthDiary/Resources/model
+          key: gemma-4-e2b-it-4bit-v1
+
+      # --- モデルダウンロード（キャッシュミス時のみ）---
+      - name: Download Gemma 4 Model
+        if: steps.model-cache.outputs.cache-hit != 'true'
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           pip3 install -q huggingface_hub
           python3 - << 'EOF'
-          import os, sys
+          import os
           from huggingface_hub import snapshot_download
           token = os.environ.get("HF_TOKEN") or None
           print(f"Downloading model ({'with token' if token else 'anonymous'})...")
@@ -38,11 +55,21 @@ jobs:
               token=token,
               ignore_patterns=["*.md", "*.txt", "LICENSE*", ".gitattributes"],
           )
-          print("Model downloaded successfully")
+          print("Model downloaded OK")
           EOF
 
+      - name: Verify model files
+        run: |
+          count=$(find Sources/HealthDiary/Resources/model -name "*.safetensors" 2>/dev/null | wc -l)
+          echo "Safetensor files: $count"
+          if [ "$count" -lt 1 ]; then echo "ERROR: model files missing"; exit 1; fi
+
+      # --- セットアップ ---
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: brew install xcodegen || true
+
+      - name: Create Recipe Database
+        run: python3 scripts/create_db.py
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -53,6 +80,7 @@ jobs:
             -project HealthDiary.xcodeproj \
             -scheme HealthDiary
 
+      # --- ビルド ---
       - name: Build for iOS Device (unsigned)
         run: |
           BUILD_DIR="$(pwd)/build-device"
@@ -67,29 +95,32 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             PROVISIONING_PROFILE_SPECIFIER="" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
             SKIP_INSTALL=NO \
             BUILD_DIR="$BUILD_DIR" \
-            2>&1 | tee build.log || (cat build.log && exit 1)
+            2>&1 | tee build.log || { tail -100 build.log; exit 1; }
 
+      # --- IPA パッケージング ---
       - name: Package IPA
         run: |
           BUILD_DIR="$(pwd)/build-device"
           APP="$BUILD_DIR/Debug-iphoneos/HealthDiary.app"
           if [ ! -d "$APP" ]; then
-            echo "ERROR: HealthDiary.app not found at $APP"
+            echo "ERROR: HealthDiary.app not found"
             ls -la "$BUILD_DIR/" 2>/dev/null || true
             exit 1
           fi
-          echo "Found: $APP"
           mkdir -p Payload
           cp -r "$APP" Payload/HealthDiary.app
           zip -qr HealthDiary.ipa Payload/
           rm -rf Payload
-          echo "IPA size: $(du -sh HealthDiary.ipa | cut -f1)"
+          SIZE=$(du -sh HealthDiary.ipa | cut -f1)
+          echo "IPA size: $SIZE"
+          echo "ipa_size=$SIZE" >> "$GITHUB_OUTPUT"
 
-      - name: Upload IPA
+      - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: HealthDiary-unsigned
+          name: HealthDiary-unsigned-${{ github.sha }}
           path: HealthDiary.ipa
           retention-days: 30

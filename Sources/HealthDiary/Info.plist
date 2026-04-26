@@ -22,6 +22,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>食事の写真を撮影してカロリーを計算します</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>食事の写真を選択してカロリーを計算します</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>健康データ（歩数・消費カロリー・体重）を読み取ります</string>
 	<key>NSHealthUpdateUsageDescription</key>
