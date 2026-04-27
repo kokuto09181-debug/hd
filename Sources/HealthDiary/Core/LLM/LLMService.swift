@@ -6,6 +6,7 @@ import MLXLMCommon
 import MLXLLM
 import MLXHuggingFace
 import Tokenizers
+import Hub
 #endif
 
 @MainActor
@@ -89,7 +90,7 @@ final class LLMService: ObservableObject {
             "tokenizer.json",
             "tokenizer_config.json",
             "special_tokens_map.json",
-        ]) { [weak self] progress in
+        ]) { [weak self] (progress: Foundation.Progress) in
             Task { @MainActor [weak self] in
                 self?.downloadState = .downloading(progress: progress.fractionCompleted)
             }
@@ -97,15 +98,27 @@ final class LLMService: ObservableObject {
         return snapshotDir
     }
 
-    /// ローカルキャッシュにモデルがあれば URL を返す
+    /// HuggingFace Hub のキャッシュ（Caches/huggingface/hub/）にモデルがあれば URL を返す
     private func findCachedModelDir() -> URL? {
-        let hub = HubApi()
-        let repo = Hub.Repo(id: Self.modelRepoID)
-        // HubApi がキャッシュを持つディレクトリを確認
-        guard let localDir = try? hub.localRepoLocation(repo) else { return nil }
-        // config.json の存在でダウンロード完了を判定
-        let configFile = localDir.appendingPathComponent("config.json")
-        return FileManager.default.fileExists(atPath: configFile.path) ? localDir : nil
+        // swift-transformers の Hub は iOS の Caches ディレクトリにキャッシュを作る
+        // モデルID "org/name" → "models--org--name" というフォルダ名になる
+        let cachesDir = FileManager.default.urls(
+            for: .cachesDirectory, in: .userDomainMask
+        ).first!
+        let dirName = "models--" + Self.modelRepoID.replacingOccurrences(of: "/", with: "--")
+        let snapshotsDir = cachesDir
+            .appendingPathComponent("huggingface/hub")
+            .appendingPathComponent(dirName)
+            .appendingPathComponent("snapshots")
+
+        guard let snapshots = try? FileManager.default.contentsOfDirectory(
+            at: snapshotsDir, includingPropertiesForKeys: nil
+        ) else { return nil }
+
+        // config.json が存在するスナップショットを「ダウンロード済み」と判定
+        return snapshots.first {
+            FileManager.default.fileExists(atPath: $0.appendingPathComponent("config.json").path)
+        }
     }
 
     // MARK: - Private: Load

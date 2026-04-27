@@ -39,6 +39,8 @@ targets:
         product: MLXHuggingFace
       - package: swift-transformers
         product: Tokenizers
+      - package: swift-transformers
+        product: Hub
 
   HealthDiaryTests:
     type: bundle.unit-test
