@@ -71,7 +71,7 @@ final class RecipeDatabase {
     }
 
     /// LLMプロンプト用に全レシピを取得（ランダム順）
-    func fetchAll(limit: Int = 150) -> [RecipeRecord] {
+    func fetchAll(limit: Int = 30) -> [RecipeRecord] {
         guard let db else { return [] }
         let query = """
             SELECT id, name, url, cuisine_type, main_ingredient, cooking_method,

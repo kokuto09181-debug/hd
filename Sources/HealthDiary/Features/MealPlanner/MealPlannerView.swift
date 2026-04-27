@@ -297,7 +297,7 @@ struct MealPlanDetailView: View {
         plan.days.removeAll()
         do {
             let request = makeRequest()
-            let recipes = RecipeDatabase.shared.fetchAll(limit: 150)
+            let recipes = RecipeDatabase.shared.fetchAll(limit: 30)
             let prompt = LLMPlanGenerator.shared.buildPublicPrompt(request: request, recipes: recipes)
             let llmCtx = LLMContext.mealPlan(
                 days: request.numberOfDays,
