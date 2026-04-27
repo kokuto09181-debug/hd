@@ -219,7 +219,6 @@ struct ChatThreadView: View {
         .navigationTitle(thread.title)
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            await llm.downloadAndLoadIfNeeded()
             await autoRespondIfNeeded()
         }
     }

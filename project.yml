@@ -2,26 +2,15 @@ name: HealthDiary
 options:
   bundleIdPrefix: com.healthdiary
   deploymentTarget:
-    iOS: "17.0"
-
-packages:
-  mlx-swift-lm:
-    url: https://github.com/ml-explore/mlx-swift-lm
-    exactVersion: "3.31.3"
-  swift-transformers:
-    url: https://github.com/huggingface/swift-transformers
-    from: "1.3.0"
-
+    iOS: "18.1"
 
 targets:
   HealthDiary:
     type: application
     platform: iOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "18.1"
     sources:
       - path: Sources/HealthDiary
-        excludes:
-          - "Resources/model/**"   # モデルはIPA同梱しない（初回起動時にダウンロード）
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.healthdiary.app
@@ -30,17 +19,7 @@ targets:
         INFOPLIST_FILE: Sources/HealthDiary/Info.plist
     entitlements:
       path: Sources/HealthDiary/HealthDiary.entitlements
-    dependencies:
-      - package: mlx-swift-lm
-        product: MLXLLM
-      - package: mlx-swift-lm
-        product: MLXLMCommon
-      - package: mlx-swift-lm
-        product: MLXHuggingFace
-      - package: swift-transformers
-        product: Tokenizers
-      - package: swift-transformers
-        product: Hub
+    # 外部パッケージ不要 — FoundationModels はOS組み込み
 
   HealthDiaryTests:
     type: bundle.unit-test

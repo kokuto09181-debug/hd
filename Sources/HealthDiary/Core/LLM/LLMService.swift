@@ -1,156 +1,88 @@
 import Foundation
-import MLXLMCommon
+import FoundationModels
 
-// MLX requires real Apple Silicon hardware — exclude from simulator
-#if !targetEnvironment(simulator)
-import MLXLLM
-import MLXHuggingFace
-import Tokenizers
-import Hub
-#endif
+// MARK: - LLMService
+// Apple Intelligence (FoundationModels) を使用。
+// MLX/HuggingFace による2GBダウンロードを廃止。
+// 対応デバイス: iPhone 15 Pro以降 / iPhone 16シリーズ (iOS 18.1+, 日本語はiOS 18.4+)
 
 @MainActor
 final class LLMService: ObservableObject {
     static let shared = LLMService()
 
     @Published var isLoading = false
-    @Published var isModelLoaded = false
-    @Published var downloadState: ModelDownloadState = .notLoaded
 
-    #if !targetEnvironment(simulator)
-    private var modelContainer: ModelContainer?
-    #endif
-
-    /// HuggingFace のモデルID（8bitに量子化されたGemma 4 E2B）
-    private static let modelRepoID = "mlx-community/gemma-4-e2b-it-8bit"
+    /// Apple Intelligence が利用可能かどうか
+    var availability: AIAvailability {
+        guard #available(iOS 18.1, *) else {
+            return .requiresOSUpdate
+        }
+        switch SystemLanguageModel.default.availability {
+        case .available:
+            return .available
+        case .unavailable(let reason):
+            switch reason {
+            case .deviceNotEligible:
+                return .deviceNotSupported
+            case .appleIntelligenceNotEnabled:
+                return .notEnabled
+            default:
+                return .notReady
+            }
+        }
+    }
 
     private init() {}
 
-    // MARK: - Public API
-
-    /// アプリ起動時に呼ぶ。未ダウンロードなら自動でダウンロード→ロードする。
-    func autoDownloadIfNeeded() async {
-        await downloadAndLoadIfNeeded()
-    }
-
-    /// UI から明示的に呼ぶことも可能
-    func downloadAndLoadIfNeeded() async {
-        guard !isModelLoaded else { return }
-
-        #if targetEnvironment(simulator)
-        downloadState = .error("シミュレーターでは利用不可")
-        #else
-        do {
-            // 1. ローカルキャッシュに既にあればダウンロードをスキップ
-            if let cachedDir = findCachedModelDir() {
-                downloadState = .loading
-                try await loadFromDir(cachedDir)
-            } else {
-                // 2. HuggingFace からダウンロード
-                let dir = try await downloadModel()
-                downloadState = .loading
-                try await loadFromDir(dir)
-            }
-        } catch {
-            downloadState = .error(error.localizedDescription)
-        }
-        #endif
-    }
+    // MARK: - Generate
 
     func generate(prompt: String, context: LLMContext) async throws -> String {
         #if targetEnvironment(simulator)
-        return "シミュレーターではAIモデルを利用できません。実機でお試しください。"
+        return simulatorResponse(for: context)
         #else
-        guard let container = modelContainer else {
-            // モデルがまだなければロードを試みてから生成
-            await downloadAndLoadIfNeeded()
-            guard let container = modelContainer else {
-                return "AIモデルを読み込めませんでした。ネットワーク接続を確認してください。"
-            }
-            return try await runGeneration(prompt: prompt, context: context, container: container)
+        guard #available(iOS 18.1, *) else {
+            return availability.message
         }
-        return try await runGeneration(prompt: prompt, context: context, container: container)
+        guard case .available = SystemLanguageModel.default.availability else {
+            return availability.message
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        let system = buildSystemPrompt(for: context)
+        let session = LanguageModelSession(instructions: system)
+
+        do {
+            let response = try await session.respond(to: prompt)
+            return response.content
+        } catch {
+            throw error
+        }
         #endif
     }
 
-    // MARK: - Private: Download
+    // MARK: - Simulator Stub
 
-    #if !targetEnvironment(simulator)
-
-    /// HuggingFace から端末にモデルをダウンロードする
-    private func downloadModel() async throws -> URL {
-        downloadState = .downloading(progress: 0)
-
-        let hub = HubApi()
-        let repo = Hub.Repo(id: Self.modelRepoID)
-
-        let snapshotDir = try await hub.snapshot(from: repo, matching: [
-            "*.safetensors",
-            "config.json",
-            "tokenizer.json",
-            "tokenizer_config.json",
-            "special_tokens_map.json",
-        ]) { [weak self] (progress: Foundation.Progress) in
-            Task { @MainActor [weak self] in
-                self?.downloadState = .downloading(progress: progress.fractionCompleted)
-            }
-        }
-        return snapshotDir
-    }
-
-    /// HuggingFace Hub のキャッシュ（Caches/huggingface/hub/）にモデルがあれば URL を返す
-    private func findCachedModelDir() -> URL? {
-        // swift-transformers の Hub は iOS の Caches ディレクトリにキャッシュを作る
-        // モデルID "org/name" → "models--org--name" というフォルダ名になる
-        let cachesDir = FileManager.default.urls(
-            for: .cachesDirectory, in: .userDomainMask
-        ).first!
-        let dirName = "models--" + Self.modelRepoID.replacingOccurrences(of: "/", with: "--")
-        let snapshotsDir = cachesDir
-            .appendingPathComponent("huggingface/hub")
-            .appendingPathComponent(dirName)
-            .appendingPathComponent("snapshots")
-
-        guard let snapshots = try? FileManager.default.contentsOfDirectory(
-            at: snapshotsDir, includingPropertiesForKeys: nil
-        ) else { return nil }
-
-        // config.json が存在するスナップショットを「ダウンロード済み」と判定
-        return snapshots.first {
-            FileManager.default.fileExists(atPath: $0.appendingPathComponent("config.json").path)
+    private func simulatorResponse(for context: LLMContext) -> String {
+        switch context {
+        case .mealPlan:
+            // 献立生成のテスト用ダミーレスポンス
+            let today = ISO8601DateFormatter().string(from: Date()).prefix(10)
+            let tomorrow = ISO8601DateFormatter().string(
+                from: Calendar.current.date(byAdding: .day, value: 1, to: Date())!
+            ).prefix(10)
+            return """
+            {"days":[{"date":"\(today)","meals":{"breakfast":"納豆ご飯","dinner":"鶏の唐揚げ"}},{"date":"\(tomorrow)","meals":{"breakfast":"卵焼き","lunch":"うどん","dinner":"肉じゃが"}}]}
+            """
+        default:
+            return "（シミュレーター）Apple Intelligenceのレスポンスが返ります。"
         }
     }
-
-    // MARK: - Private: Load
-
-    private func loadFromDir(_ dir: URL) async throws {
-        modelContainer = try await LLMModelFactory.shared.loadContainer(
-            from: dir,
-            using: #huggingFaceTokenizerLoader()
-        )
-        isModelLoaded = true
-        downloadState = .ready
-    }
-
-    // MARK: - Private: Generate
-
-    private func runGeneration(
-        prompt: String,
-        context: LLMContext,
-        container: ModelContainer
-    ) async throws -> String {
-        isLoading = true
-        defer { isLoading = false }
-        let system = buildSystemPrompt(for: context)
-        let session = ChatSession(container, instructions: system)
-        return try await session.respond(to: prompt)
-    }
-
-    #endif
 
     // MARK: - System Prompts
 
-    private func buildSystemPrompt(for context: LLMContext) -> String {
+    func buildSystemPrompt(for context: LLMContext) -> String {
         switch context {
         case .recipe(let name, let ingredients):
             if name.isEmpty { return "料理・レシピの相談アシスタントです。日本語で簡潔に答えます。" }
@@ -158,7 +90,7 @@ final class LLMService: ObservableObject {
         case .mealPlan(let days, let familySize):
             return "\(familySize)人家族の食事・献立相談アシスタントです。\(days)日分を目安に日本語で提案します。"
         case .leftover(let recipeName, let pantryItems):
-            let pantryText = pantryItems.isEmpty ? "" : "\n冷蔵庫にある食材: \(pantryItems.joined(separator: "、"))"
+            let pantryText = pantryItems.isEmpty ? "" : "冷蔵庫にある食材: \(pantryItems.joined(separator: "、"))"
             if recipeName.isEmpty { return "残り物・冷蔵庫にある食材を使ったレシピを提案する日本語アシスタントです。\(pantryText)" }
             return "残り物活用アシスタントです。\(recipeName)を使ったアレンジを日本語で提案します。\(pantryText)"
         case .health:
@@ -187,27 +119,32 @@ final class LLMService: ObservableObject {
     }
 }
 
-// MARK: - Download State
+// MARK: - Availability
 
-enum ModelDownloadState: Equatable {
-    case notLoaded
-    case downloading(progress: Double)  // 0.0 〜 1.0
-    case loading
-    case ready
-    case error(String)
+enum AIAvailability {
+    case available
+    case deviceNotSupported   // iPhone 15 Pro未満
+    case notEnabled           // 設定でApple Intelligenceがオフ
+    case notReady             // モデル準備中
+    case requiresOSUpdate     // iOS 18.1未満
 
-    var description: String {
+    var message: String {
         switch self {
-        case .notLoaded:               return "未ダウンロード"
-        case .downloading(let p):      return "ダウンロード中 \(Int(p * 100))%"
-        case .loading:                 return "読み込み中…"
-        case .ready:                   return "使用可能"
-        case .error(let msg):          return "エラー: \(msg)"
+        case .available:
+            return ""
+        case .deviceNotSupported:
+            return "Apple Intelligenceに対応していないデバイスです。iPhone 15 Pro以降が必要です。"
+        case .notEnabled:
+            return "Apple Intelligenceが有効になっていません。設定 > Apple IntelligenceとSiri からオンにしてください。"
+        case .notReady:
+            return "Apple Intelligenceのモデルを準備中です。しばらく待ってから再度お試しください。"
+        case .requiresOSUpdate:
+            return "iOS 18.1以降が必要です。設定 > 一般 > ソフトウェアアップデート から更新してください。"
         }
     }
 
-    var isDownloading: Bool {
-        if case .downloading = self { return true }
+    var isAvailable: Bool {
+        if case .available = self { return true }
         return false
     }
 }

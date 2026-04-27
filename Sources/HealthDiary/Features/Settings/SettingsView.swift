@@ -62,85 +62,52 @@ struct SettingsView: View {
     private var aiModelSection: some View {
         Section {
             HStack {
-                Label("Gemma 4 E2B (4-bit量子化)", systemImage: "brain")
+                Label("Apple Intelligence", systemImage: "apple.intelligence")
                 Spacer()
-                modelStateIcon
+                availabilityIcon
             }
 
-            // ダウンロード中のプログレスバー
-            if case .downloading(let progress) = llm.downloadState {
-                VStack(alignment: .leading, spacing: 4) {
-                    ProgressView(value: progress)
-                        .tint(.blue)
-                    Text("\(Int(progress * 100))% ダウンロード中…")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            // エラー詳細 + 再試行ボタン
-            if case .error(let msg) = llm.downloadState {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(msg)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Button("再試行") {
-                        Task { await llm.downloadAndLoadIfNeeded() }
-                    }
+            if !llm.availability.isAvailable {
+                Text(llm.availability.message)
                     .font(.caption)
-                }
-            }
-
-            // 未ダウンロード時の手動ダウンロードボタン
-            if case .notLoaded = llm.downloadState {
-                Button {
-                    Task { await llm.downloadAndLoadIfNeeded() }
-                } label: {
-                    Label("今すぐダウンロード（約1.5GB）", systemImage: "arrow.down.circle")
-                }
+                    .foregroundStyle(.secondary)
             }
 
         } header: {
-            Text("AIモデル")
+            Text("AI")
         } footer: {
-            Text(modelFooterText)
+            Text(availabilityFooter)
         }
     }
 
-    private var modelStateIcon: some View {
+    private var availabilityIcon: some View {
         Group {
-            switch llm.downloadState {
-            case .notLoaded:
-                Image(systemName: "arrow.down.circle")
-                    .foregroundStyle(.secondary)
-            case .downloading:
-                ProgressView()
-                    .scaleEffect(0.8)
-            case .loading:
-                ProgressView()
-                    .scaleEffect(0.8)
-            case .ready:
+            switch llm.availability {
+            case .available:
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
-            case .error:
+            case .notEnabled, .notReady:
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
+            case .deviceNotSupported, .requiresOSUpdate:
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.red)
             }
         }
     }
 
-    private var modelFooterText: String {
-        switch llm.downloadState {
-        case .notLoaded:
-            return "初回のみWi-Fiでのダウンロードが必要です（約1.5GB）。以降はオフラインで動作し、会話内容は端末外に送信されません。"
-        case .downloading:
-            return "Wi-Fiでのダウンロードをお勧めします。ダウンロード後はオフラインで動作します。"
-        case .loading:
-            return "モデルをメモリに読み込んでいます…"
-        case .ready:
+    private var availabilityFooter: String {
+        switch llm.availability {
+        case .available:
             return "オンデバイスで動作中。会話内容は端末外に送信されません。"
-        case .error:
-            return "ダウンロードに失敗しました。Wi-Fi接続を確認してから再試行してください。"
+        case .notEnabled:
+            return "設定 > Apple IntelligenceとSiri からオンにしてください。"
+        case .notReady:
+            return "Apple Intelligenceのモデルを準備中です。"
+        case .deviceNotSupported:
+            return "iPhone 15 Pro以降、またはiPad Pro (M4)以降が必要です。"
+        case .requiresOSUpdate:
+            return "iOS 18.1以降（日本語はiOS 18.4以降）が必要です。"
         }
     }
 
