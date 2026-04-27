@@ -21,8 +21,8 @@ final class LLMService: ObservableObject {
     private var modelContainer: ModelContainer?
     #endif
 
-    /// HuggingFace のモデルID（4bitに量子化されたGemma 4 2B）
-    private static let modelRepoID = "mlx-community/gemma-4-e2b-it-4bit"
+    /// HuggingFace のモデルID（8bitに量子化されたGemma 4 E2B）
+    private static let modelRepoID = "mlx-community/gemma-4-e2b-it-8bit"
 
     private init() {}
 
