@@ -21,9 +21,7 @@ targets:
     sources:
       - path: Sources/HealthDiary
         excludes:
-          - "Resources/model/**"
-      - path: Sources/HealthDiary/Resources/model
-        type: folder
+          - "Resources/model/**"   # モデルはIPA同梱しない（初回起動時にダウンロード）
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.healthdiary.app

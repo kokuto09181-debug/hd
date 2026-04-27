@@ -12,7 +12,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # --- キャッシュ ---
       - name: Cache Swift Package Manager
         uses: actions/cache@v4
         with:
@@ -29,47 +28,15 @@ jobs:
           key: ${{ runner.os }}-brew-xcodegen
           restore-keys: ${{ runner.os }}-brew-
 
-      # Gemma モデルキャッシュ（モデルバージョンが変わらない限り再ダウンロード不要）
-      - name: Cache Gemma model
-        id: model-cache
-        uses: actions/cache@v4
-        with:
-          path: Sources/HealthDiary/Resources/model
-          key: gemma-4-e2b-it-4bit-v1
-
-      # --- モデルダウンロード（キャッシュミス時のみ）---
-      - name: Download Gemma 4 Model
-        if: steps.model-cache.outputs.cache-hit != 'true'
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          python3 -m pip install -q --break-system-packages huggingface_hub
-          python3 - << 'EOF'
-          import os
-          from huggingface_hub import snapshot_download
-          token = os.environ.get("HF_TOKEN") or None
-          print(f"Downloading model ({'with token' if token else 'anonymous'})...")
-          snapshot_download(
-              repo_id="mlx-community/gemma-4-e2b-it-4bit",
-              local_dir="Sources/HealthDiary/Resources/model",
-              token=token,
-              ignore_patterns=["*.md", "*.txt", "LICENSE*", ".gitattributes"],
-          )
-          print("Model downloaded OK")
-          EOF
-
-      - name: Verify model files
-        run: |
-          count=$(find Sources/HealthDiary/Resources/model -name "*.safetensors" 2>/dev/null | wc -l)
-          echo "Safetensor files: $count"
-          if [ "$count" -lt 1 ]; then echo "ERROR: model files missing"; exit 1; fi
-
-      # --- セットアップ ---
       - name: Install XcodeGen
         run: brew install xcodegen || true
 
       - name: Create Recipe Database
         run: python3 scripts/create_db.py
+
+      # モデルはアプリ内でダウンロードするため、CI では空ディレクトリだけ作成
+      - name: Create model placeholder directory
+        run: mkdir -p Sources/HealthDiary/Resources/model
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -80,7 +47,6 @@ jobs:
             -project HealthDiary.xcodeproj \
             -scheme HealthDiary
 
-      # --- ビルド ---
       - name: Build for iOS Device (unsigned)
         run: |
           BUILD_DIR="$(pwd)/build-device"
@@ -100,7 +66,6 @@ jobs:
             BUILD_DIR="$BUILD_DIR" \
             2>&1 | tee build.log || { tail -100 build.log; exit 1; }
 
-      # --- IPA パッケージング ---
       - name: Package IPA
         run: |
           BUILD_DIR="$(pwd)/build-device"
@@ -114,9 +79,7 @@ jobs:
           cp -r "$APP" Payload/HealthDiary.app
           zip -qr HealthDiary.ipa Payload/
           rm -rf Payload
-          SIZE=$(du -sh HealthDiary.ipa | cut -f1)
-          echo "IPA size: $SIZE"
-          echo "ipa_size=$SIZE" >> "$GITHUB_OUTPUT"
+          echo "IPA size: $(du -sh HealthDiary.ipa | cut -f1)"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4

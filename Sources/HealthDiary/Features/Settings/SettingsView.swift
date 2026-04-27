@@ -64,31 +64,83 @@ struct SettingsView: View {
             HStack {
                 Label("Gemma 4 E2B (4-bit量子化)", systemImage: "brain")
                 Spacer()
-                switch llm.downloadState {
-                case .loading:
-                    ProgressView()
-                        .scaleEffect(0.8)
-                case .ready:
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                case .error:
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                case .notLoaded:
-                    Image(systemName: "clock")
+                modelStateIcon
+            }
+
+            // ダウンロード中のプログレスバー
+            if case .downloading(let progress) = llm.downloadState {
+                VStack(alignment: .leading, spacing: 4) {
+                    ProgressView(value: progress)
+                        .tint(.blue)
+                    Text("\(Int(progress * 100))% ダウンロード中…")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
+            // エラー詳細 + 再試行ボタン
             if case .error(let msg) = llm.downloadState {
-                Text(msg)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(msg)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("再試行") {
+                        Task { await llm.downloadAndLoadIfNeeded() }
+                    }
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                }
             }
+
+            // 未ダウンロード時の手動ダウンロードボタン
+            if case .notLoaded = llm.downloadState {
+                Button {
+                    Task { await llm.downloadAndLoadIfNeeded() }
+                } label: {
+                    Label("今すぐダウンロード（約1.5GB）", systemImage: "arrow.down.circle")
+                }
+            }
+
         } header: {
             Text("AIモデル")
         } footer: {
-            Text("アプリに同梱されたオンデバイスモデルです。通信不要でプライバシーが守られます。")
+            Text(modelFooterText)
+        }
+    }
+
+    private var modelStateIcon: some View {
+        Group {
+            switch llm.downloadState {
+            case .notLoaded:
+                Image(systemName: "arrow.down.circle")
+                    .foregroundStyle(.secondary)
+            case .downloading:
+                ProgressView()
+                    .scaleEffect(0.8)
+            case .loading:
+                ProgressView()
+                    .scaleEffect(0.8)
+            case .ready:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            case .error:
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+            }
+        }
+    }
+
+    private var modelFooterText: String {
+        switch llm.downloadState {
+        case .notLoaded:
+            return "初回のみWi-Fiでのダウンロードが必要です（約1.5GB）。以降はオフラインで動作し、会話内容は端末外に送信されません。"
+        case .downloading:
+            return "Wi-Fiでのダウンロードをお勧めします。ダウンロード後はオフラインで動作します。"
+        case .loading:
+            return "モデルをメモリに読み込んでいます…"
+        case .ready:
+            return "オンデバイスで動作中。会話内容は端末外に送信されません。"
+        case .error:
+            return "ダウンロードに失敗しました。Wi-Fi接続を確認してから再試行してください。"
         }
     }
 
