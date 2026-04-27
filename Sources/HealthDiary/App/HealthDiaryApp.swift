@@ -21,9 +21,8 @@ struct HealthDiaryApp: App {
                     if !onboardingCompleted {
                         showOnboarding = true
                     }
-                    Task {
-                        await LLMService.shared.autoDownloadIfNeeded()
-                    }
+                    // Apple Intelligence はオンデバイスで動作するため
+                    // 起動時のモデルダウンロードは不要
                 }
                 .fullScreenCover(isPresented: $showOnboarding) {
                     OnboardingView(isPresented: $showOnboarding)
