@@ -1,5 +1,33 @@
 import Foundation
+import FoundationModels
 import SwiftData
+
+// MARK: - @Generable 構造化出力型
+// Apple Intelligence が型安全に返す出力。JSONパースが一切不要。
+// シミュレーターでは同一型のスタブデータを返すため、デバイス/シミュレーターで
+// コードパスが統一される。
+
+@Generable
+struct MealPlanOutput {
+    @Guide(description: "生成した日数分の献立リスト（指定日数と同じ要素数）")
+    var days: [DayMealOutput]
+}
+
+@Generable
+struct DayMealOutput {
+    @Guide(description: "日付 YYYY-MM-DD形式")
+    var date: String
+    @Guide(description: "朝食の料理名。このスロットを使わない日はnil")
+    var breakfast: String?
+    @Guide(description: "昼食の料理名。このスロットを使わない日はnil")
+    var lunch: String?
+    @Guide(description: "夕食の料理名。このスロットを使わない日はnil")
+    var dinner: String?
+    @Guide(description: "間食の料理名。このスロットを使わない日はnil")
+    var snack: String?
+}
+
+// MARK: - LLMPlanGenerator
 
 /// LLMを使った献立生成サービス
 ///
@@ -27,26 +55,37 @@ final class LLMPlanGenerator {
     }
 
     enum GenerationError: LocalizedError {
-        case modelNotLoaded
         case invalidResponse(String)
         var errorDescription: String? {
             switch self {
-            case .modelNotLoaded: return "AIモデルがまだ読み込まれていません"
             case .invalidResponse(let msg): return "献立の生成に失敗しました: \(msg)"
             }
         }
     }
 
-    // MARK: - Generate Full Plan
+    // MARK: - Generate Full Plan（新規作成）
 
     func generate(request: GenerationRequest, context: ModelContext) async throws -> MealPlan {
-        let prompt = buildPrompt(request: request)
-        let llmCtx = LLMContext.mealPlan(
-            days: request.numberOfDays,
-            familySize: request.familyProfile?.members.count ?? 1
-        )
-        let rawText = try await LLMService.shared.generate(prompt: prompt, context: llmCtx)
-        return try parsePlanJSON(rawText, request: request, context: context)
+        let output = try await fetchOutput(for: request)
+        return buildPlan(from: output, request: request, context: context)
+    }
+
+    // MARK: - Regenerate Full Plan（既存プランの全日置き換え）
+    // MealPlannerView から呼ぶ。日の削除は呼び出し元で行う。
+
+    func regenerate(
+        plan: MealPlan,
+        request: GenerationRequest,
+        context: ModelContext
+    ) async throws {
+        let output = try await fetchOutput(for: request)
+        for dayOutput in output.days {
+            let date = parseDate(dayOutput.date) ?? request.startDate
+            let dayPlan = DayPlan(date: date)
+            context.insert(dayPlan)
+            appendMeals(from: dayOutput, to: dayPlan, context: context)
+            plan.days.append(dayPlan)
+        }
     }
 
     // MARK: - Regenerate Single Day
@@ -57,35 +96,105 @@ final class LLMPlanGenerator {
         request: GenerationRequest,
         context: ModelContext
     ) async throws {
+        let output = try await fetchDayOutput(for: dayPlan, plan: plan, request: request)
+        dayPlan.meals.forEach { context.delete($0) }
+        dayPlan.meals.removeAll()
+        appendMeals(from: output, to: dayPlan, context: context)
+    }
+
+    // MARK: - Private: LLM / Simulator 分岐
+
+    private func fetchOutput(for request: GenerationRequest) async throws -> MealPlanOutput {
+        #if targetEnvironment(simulator)
+        return buildSimulatorOutput(request: request)
+        #else
+        let prompt = buildPrompt(request: request)
+        let llmCtx = LLMContext.mealPlan(
+            days: request.numberOfDays,
+            familySize: request.familyProfile?.members.count ?? 1
+        )
+        return try await LLMService.shared.generate(
+            prompt: prompt, context: llmCtx, generating: MealPlanOutput.self
+        )
+        #endif
+    }
+
+    private func fetchDayOutput(
+        for dayPlan: DayPlan,
+        plan: MealPlan,
+        request: GenerationRequest
+    ) async throws -> DayMealOutput {
+        #if targetEnvironment(simulator)
+        return buildSimulatorDayOutput(for: dayPlan.date)
+        #else
         let prompt = buildDayPrompt(dayPlan: dayPlan, plan: plan, request: request)
         let llmCtx = LLMContext.mealPlan(
             days: 1,
             familySize: request.familyProfile?.members.count ?? 1
         )
-        let rawText = try await LLMService.shared.generate(prompt: prompt, context: llmCtx)
-        try parseDayJSON(rawText, into: dayPlan, context: context)
+        return try await LLMService.shared.generate(
+            prompt: prompt, context: llmCtx, generating: DayMealOutput.self
+        )
+        #endif
     }
 
-    // MARK: - Public (MealPlanDetailView の全体再生成用)
+    // MARK: - Plan Construction
 
-    func buildPublicPrompt(request: GenerationRequest) -> String {
-        buildPrompt(request: request)
-    }
-
-    func applyPlanJSON(
-        _ text: String,
-        to plan: MealPlan,
+    private func buildPlan(
+        from output: MealPlanOutput,
         request: GenerationRequest,
         context: ModelContext
-    ) throws {
-        let data = try extractJSON(from: text)
-        let response = try JSONDecoder().decode(PlanResponse.self, from: data)
-        for dayResp in response.days {
-            let date = parseDate(dayResp.date) ?? request.startDate
+    ) -> MealPlan {
+        let endDate = Calendar.current.date(
+            byAdding: .day, value: request.numberOfDays - 1, to: request.startDate
+        ) ?? request.startDate
+
+        let plan = MealPlan(startDate: request.startDate, endDate: endDate)
+        plan.generationConditions = request.conditions
+        plan.slotConfigWeekday = request.slotConfig.weekday.map { $0.rawValue }
+        plan.slotConfigWeekend = request.slotConfig.weekend.map { $0.rawValue }
+        context.insert(plan)
+
+        for dayOutput in output.days {
+            let date = parseDate(dayOutput.date) ?? request.startDate
             let dayPlan = DayPlan(date: date)
             context.insert(dayPlan)
-            appendMeals(from: dayResp.meals, to: dayPlan, context: context)
+            appendMeals(from: dayOutput, to: dayPlan, context: context)
             plan.days.append(dayPlan)
+        }
+        return plan
+    }
+
+    // MARK: - Meal Attachment
+    // LLMが生成した料理名を PlannedMeal に変換。
+    // DBに近いレシピがあれば紐付け（食材・カロリー利用可能になる）。
+    // なければ料理名だけ保存（ユーザーは後で手動編集できる）。
+
+    private func appendMeals(
+        from output: DayMealOutput,
+        to dayPlan: DayPlan,
+        context: ModelContext
+    ) {
+        let slots: [(MealType, String?)] = [
+            (.breakfast, output.breakfast),
+            (.lunch,     output.lunch),
+            (.dinner,    output.dinner),
+            (.snack,     output.snack)
+        ]
+        for (mealType, mealName) in slots {
+            guard let mealName else { continue }
+            let meal = PlannedMeal(mealType: mealType)
+            if let recipe = RecipeDatabase.shared.searchByName(mealName) {
+                meal.recipeID  = recipe.id
+                meal.recipeName = recipe.name
+                meal.recipeURL = recipe.url.isEmpty ? nil : recipe.url
+            } else {
+                // DBに該当なし → LLMの料理名をそのまま使用
+                meal.recipeName = mealName
+            }
+            meal.notes = ""
+            context.insert(meal)
+            dayPlan.meals.append(meal)
         }
     }
 
@@ -97,7 +206,6 @@ final class LLMPlanGenerator {
         let conditionsText = request.conditions.isEmpty
             ? "特になし"
             : request.conditions.joined(separator: "、")
-        // 最近の料理名だけ渡す（IDや詳細情報は不要）
         let recentNames = request.recentHistory.prefix(15).compactMap { $0.recipeName }
         let recentText = recentNames.isEmpty ? "なし" : recentNames.joined(separator: "、")
         let slotsText = buildSlotsText(request: request)
@@ -111,9 +219,7 @@ final class LLMPlanGenerator {
         \(slotsText)
 
         上記の条件で日本の家庭料理の献立を提案してください。
-        JSONのみ出力（説明文・コードブロック記号は不要）:
-        {"days":[{"date":"YYYY-MM-DD","meals":{"breakfast":"料理名","lunch":"料理名","dinner":"料理名"}},...]}
-        スロット外のキーは省略。
+        スロット一覧にないスロット（例: スロットがない日の朝食）はnilにしてください。
         """
     }
 
@@ -137,10 +243,9 @@ final class LLMPlanGenerator {
 
         return """
         \(familyText)
-        \(dateStr)(\(slotStr))の1日分の献立を提案してください。
+        \(dateStr)（スロット: \(slotStr)）の1日分の献立を提案してください。
         他の日で使った料理（重複不可）: \(usedNames.isEmpty ? "なし" : usedNames)
-        JSONのみ出力: {"date":"\(dateStr)","meals":{"breakfast":"料理名","dinner":"料理名"}}
-        スロット外のキーは省略。
+        スロット外の食事はnilにしてください。
         """
     }
 
@@ -173,106 +278,36 @@ final class LLMPlanGenerator {
         }.joined(separator: "\n")
     }
 
-    // MARK: - JSON Parsing
-    // LLMが返す形式: {"days":[{"date":"YYYY-MM-DD","meals":{"breakfast":"料理名",...}}]}
-    // 料理名をDBと照合してレシピIDを付与（マッチしない場合はLLMの料理名をそのまま使用）
+    // MARK: - Simulator Stubs
 
-    private struct PlanResponse: Decodable {
-        let days: [DayResponse]
-    }
-
-    private struct DayResponse: Decodable {
-        let date: String
-        let meals: [String: String]   // "breakfast" -> "料理名"
-    }
-
-    private func parsePlanJSON(
-        _ text: String,
-        request: GenerationRequest,
-        context: ModelContext
-    ) throws -> MealPlan {
-        let data = try extractJSON(from: text)
-        let response = try JSONDecoder().decode(PlanResponse.self, from: data)
-
-        let endDate = Calendar.current.date(
-            byAdding: .day, value: request.numberOfDays - 1, to: request.startDate
-        ) ?? request.startDate
-
-        let plan = MealPlan(startDate: request.startDate, endDate: endDate)
-        plan.generationConditions = request.conditions
-        plan.slotConfigWeekday = request.slotConfig.weekday.map { $0.rawValue }
-        plan.slotConfigWeekend = request.slotConfig.weekend.map { $0.rawValue }
-        context.insert(plan)
-
-        for dayResp in response.days {
-            let date = parseDate(dayResp.date) ?? request.startDate
-            let dayPlan = DayPlan(date: date)
-            context.insert(dayPlan)
-            appendMeals(from: dayResp.meals, to: dayPlan, context: context)
-            plan.days.append(dayPlan)
+    private func buildSimulatorOutput(request: GenerationRequest) -> MealPlanOutput {
+        let cal = Calendar.current
+        let days = (0..<request.numberOfDays).map { i in
+            let date = cal.date(byAdding: .day, value: i, to: request.startDate)!
+            return buildSimulatorDayOutput(for: date)
         }
-        return plan
+        return MealPlanOutput(days: days)
     }
 
-    private func parseDayJSON(
-        _ text: String,
-        into dayPlan: DayPlan,
-        context: ModelContext
-    ) throws {
-        let data = try extractJSON(from: text)
-        let dayResp = try JSONDecoder().decode(DayResponse.self, from: data)
-        dayPlan.meals.forEach { context.delete($0) }
-        dayPlan.meals.removeAll()
-        appendMeals(from: dayResp.meals, to: dayPlan, context: context)
-    }
-
-    /// LLMが生成した料理名を PlannedMeal に変換。
-    /// DBに近いレシピがあれば紐付け（食材・カロリー利用可能になる）。
-    /// なければ料理名だけ保存（ユーザーは後で手動編集できる）。
-    private func appendMeals(
-        from mealsDict: [String: String],
-        to dayPlan: DayPlan,
-        context: ModelContext
-    ) {
-        let mealTypeMap: [String: MealType] = [
-            "breakfast": .breakfast,
-            "lunch": .lunch,
-            "dinner": .dinner,
-            "snack": .snack
+    private func buildSimulatorDayOutput(for date: Date) -> DayMealOutput {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        // 曜日ごとに異なる献立を返す（バリエーション確認用）
+        let menus: [(String?, String?, String?)] = [
+            ("納豆ご飯",   nil,        "鶏の唐揚げ"),
+            ("卵焼き",     "うどん",   "肉じゃが"),
+            ("トースト",   "チャーハン","鮭の塩焼き"),
+            ("ヨーグルト", nil,        "豚の生姜焼き"),
+            ("おにぎり",   "そば",     "野菜炒め"),
+            ("パンケーキ", "カレーライス","麻婆豆腐"),
+            ("シリアル",   nil,        "ハンバーグ"),
         ]
-        let slotOrder: [String] = ["breakfast", "lunch", "dinner", "snack"]
-        for key in slotOrder {
-            guard let mealName = mealsDict[key],
-                  let mealType = mealTypeMap[key] else { continue }
-            let meal = PlannedMeal(mealType: mealType)
-            // DBで近いレシピを探してリンク
-            if let recipe = RecipeDatabase.shared.searchByName(mealName) {
-                meal.recipeID = recipe.id
-                meal.recipeName = recipe.name
-                meal.recipeURL = recipe.url.isEmpty ? nil : recipe.url
-            } else {
-                // DBに該当なし → LLMの料理名をそのまま使用
-                meal.recipeName = mealName
-            }
-            meal.notes = ""
-            context.insert(meal)
-            dayPlan.meals.append(meal)
-        }
+        let idx = Calendar.current.component(.weekday, from: date) % menus.count
+        let (b, l, d) = menus[idx]
+        return DayMealOutput(date: fmt.string(from: date), breakfast: b, lunch: l, dinner: d, snack: nil)
     }
 
     // MARK: - Helpers
-
-    private func extractJSON(from text: String) throws -> Data {
-        guard let startIdx = text.firstIndex(of: "{"),
-              let endIdx = text.lastIndex(of: "}") else {
-            throw GenerationError.invalidResponse("JSONが見つかりません（出力: \(text.prefix(80))）")
-        }
-        let jsonString = String(text[startIdx...endIdx])
-        guard let data = jsonString.data(using: .utf8) else {
-            throw GenerationError.invalidResponse("エンコードエラー")
-        }
-        return data
-    }
 
     private func parseDate(_ string: String) -> Date? {
         let fmt = DateFormatter()

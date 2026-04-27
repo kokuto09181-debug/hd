@@ -40,7 +40,10 @@ struct ChatView: View {
                 }
             }
             .onDelete { indexSet in
-                indexSet.forEach { context.delete(threads[$0]) }
+                for i in indexSet {
+                    LLMService.shared.clearChatSession(for: threads[i].sessionID)
+                    context.delete(threads[i])
+                }
             }
         }
     }
@@ -253,7 +256,7 @@ struct ChatThreadView: View {
 
         Task {
             do {
-                let response = try await llm.generate(prompt: text, context: llmContext)
+                let response = try await llm.chat(prompt: text, threadID: thread.sessionID, context: llmContext)
                 let assistantMsg = ChatMessage(role: .assistant, content: response)
                 context.insert(assistantMsg)
                 thread.messages.append(assistantMsg)
@@ -269,7 +272,7 @@ struct ChatThreadView: View {
               let first = sortedMessages.first,
               first.role == .user else { return }
         do {
-            let response = try await llm.generate(prompt: first.content, context: llmContext)
+            let response = try await llm.chat(prompt: first.content, threadID: thread.sessionID, context: llmContext)
             let assistantMsg = ChatMessage(role: .assistant, content: response)
             context.insert(assistantMsg)
             thread.messages.append(assistantMsg)

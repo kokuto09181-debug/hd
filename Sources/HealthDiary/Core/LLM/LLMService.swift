@@ -3,8 +3,12 @@ import FoundationModels
 
 // MARK: - LLMService
 // Apple Intelligence (FoundationModels) を使用。
-// MLX/HuggingFace による2GBダウンロードを廃止。
-// 対応デバイス: iPhone 15 Pro以降 / iPhone 16シリーズ (iOS 18.1+, 日本語はiOS 18.4+)
+// デプロイターゲット iOS 18.1 のため #available ガード不要。
+//
+// 3つの生成メソッド:
+//   generate(prompt:context:)          → 文字列出力（汎用）
+//   generate(prompt:context:generating:) → 型安全な構造化出力 (@Generable)
+//   chat(prompt:threadID:context:)     → 会話継続（スレッドごとにセッション保持）
 
 @MainActor
 final class LLMService: ObservableObject {
@@ -12,54 +16,100 @@ final class LLMService: ObservableObject {
 
     @Published var isLoading = false
 
-    /// Apple Intelligence が利用可能かどうか
+    // チャットスレッドごとの会話セッション（アプリ起動中は保持）
+    private var chatSessions: [UUID: LanguageModelSession] = [:]
+
     var availability: AIAvailability {
-        guard #available(iOS 18.1, *) else {
-            return .requiresOSUpdate
-        }
+        #if targetEnvironment(simulator)
+        return .available   // シミュレーターはスタブで対応
+        #else
         switch SystemLanguageModel.default.availability {
         case .available:
             return .available
         case .unavailable(let reason):
             switch reason {
-            case .deviceNotEligible:
-                return .deviceNotSupported
-            case .appleIntelligenceNotEnabled:
-                return .notEnabled
-            default:
-                return .notReady
+            case .deviceNotEligible:      return .deviceNotSupported
+            case .appleIntelligenceNotEnabled: return .notEnabled
+            default:                      return .notReady
             }
         }
+        #endif
     }
 
     private init() {}
 
-    // MARK: - Generate
+    // MARK: - 1. 文字列出力（汎用・後方互換）
 
     func generate(prompt: String, context: LLMContext) async throws -> String {
         #if targetEnvironment(simulator)
         return simulatorResponse(for: context)
         #else
-        guard #available(iOS 18.1, *) else {
-            return availability.message
-        }
-        guard case .available = SystemLanguageModel.default.availability else {
-            return availability.message
-        }
+        guard availability.isAvailable else { return availability.message }
+        isLoading = true
+        defer { isLoading = false }
+        let session = LanguageModelSession(instructions: buildSystemPrompt(for: context))
+        let response = try await session.respond(to: prompt)
+        return response.content
+        #endif
+    }
 
+    // MARK: - 2. 型安全な構造化出力 (@Generable)
+    // LLMPlanGenerator で献立を型安全に生成するために使用。
+    // JSONパースが不要になり、出力形式の崩れによるクラッシュがなくなる。
+
+    func generate<T: Generable>(
+        prompt: String,
+        context: LLMContext,
+        generating type: T.Type
+    ) async throws -> T {
+        #if targetEnvironment(simulator)
+        throw LLMError.simulatorUnsupported
+        #else
+        guard availability.isAvailable else {
+            throw LLMError.notAvailable(availability.message)
+        }
+        isLoading = true
+        defer { isLoading = false }
+        let session = LanguageModelSession(instructions: buildSystemPrompt(for: context))
+        let response = try await session.respond(to: prompt, generating: type)
+        return response.content
+        #endif
+    }
+
+    // MARK: - 3. 会話継続チャット（スレッドごとにセッションを保持）
+    // 同じ threadID で呼ぶたびに同一セッションを使い、
+    // モデルが前の発言を踏まえた返答ができる。
+
+    func chat(
+        prompt: String,
+        threadID: UUID,
+        context: LLMContext
+    ) async throws -> String {
+        #if targetEnvironment(simulator)
+        return "（シミュレーター）\(prompt.prefix(20))... に対するAIの返答です。"
+        #else
+        guard availability.isAvailable else { return availability.message }
         isLoading = true
         defer { isLoading = false }
 
-        let system = buildSystemPrompt(for: context)
-        let session = LanguageModelSession(instructions: system)
-
-        do {
-            let response = try await session.respond(to: prompt)
-            return response.content
-        } catch {
-            throw error
+        // セッションを取得、なければ新規作成
+        let session: LanguageModelSession
+        if let existing = chatSessions[threadID] {
+            session = existing
+        } else {
+            let s = LanguageModelSession(instructions: buildSystemPrompt(for: context))
+            chatSessions[threadID] = s
+            session = s
         }
+
+        let response = try await session.respond(to: prompt)
+        return response.content
         #endif
+    }
+
+    /// チャットスレッド削除時に呼ぶ。セッションを解放してメモリを回収する。
+    func clearChatSession(for threadID: UUID) {
+        chatSessions.removeValue(forKey: threadID)
     }
 
     // MARK: - Simulator Stub
@@ -67,16 +117,18 @@ final class LLMService: ObservableObject {
     private func simulatorResponse(for context: LLMContext) -> String {
         switch context {
         case .mealPlan:
-            // 献立生成のテスト用ダミーレスポンス
-            let today = ISO8601DateFormatter().string(from: Date()).prefix(10)
-            let tomorrow = ISO8601DateFormatter().string(
-                from: Calendar.current.date(byAdding: .day, value: 1, to: Date())!
-            ).prefix(10)
+            let fmt = DateFormatter()
+            fmt.dateFormat = "yyyy-MM-dd"
+            let d0 = fmt.string(from: Date())
+            let d1 = fmt.string(from: Calendar.current.date(byAdding: .day, value: 1, to: Date())!)
             return """
-            {"days":[{"date":"\(today)","meals":{"breakfast":"納豆ご飯","dinner":"鶏の唐揚げ"}},{"date":"\(tomorrow)","meals":{"breakfast":"卵焼き","lunch":"うどん","dinner":"肉じゃが"}}]}
+            {"days":[
+              {"date":"\(d0)","breakfast":"納豆ご飯","dinner":"鶏の唐揚げ"},
+              {"date":"\(d1)","breakfast":"卵焼き","lunch":"うどん","dinner":"肉じゃが"}
+            ]}
             """
         default:
-            return "（シミュレーター）Apple Intelligenceのレスポンスが返ります。"
+            return "（シミュレーター）Apple Intelligenceの返答がここに表示されます。"
         }
     }
 
@@ -94,7 +146,7 @@ final class LLMService: ObservableObject {
             if recipeName.isEmpty { return "残り物・冷蔵庫にある食材を使ったレシピを提案する日本語アシスタントです。\(pantryText)" }
             return "残り物活用アシスタントです。\(recipeName)を使ったアレンジを日本語で提案します。\(pantryText)"
         case .health:
-            return "健康管理・栄養アドバイスの日本語アシスタントです。医療的診断はしません。"
+            return "健康管理・栄養の情報を提供する日本語アシスタントです。医療的診断はしません。"
         case .free:
             return "食事・健康管理アプリのアシスタントです。日本語で簡潔に答えます。"
         case .foodAnalysis:
@@ -119,27 +171,36 @@ final class LLMService: ObservableObject {
     }
 }
 
+// MARK: - Errors
+
+enum LLMError: LocalizedError {
+    case notAvailable(String)
+    case simulatorUnsupported
+
+    var errorDescription: String? {
+        switch self {
+        case .notAvailable(let msg): return msg
+        case .simulatorUnsupported:  return "シミュレーターでは構造化出力を利用できません"
+        }
+    }
+}
+
 // MARK: - Availability
 
 enum AIAvailability {
     case available
-    case deviceNotSupported   // iPhone 15 Pro未満
-    case notEnabled           // 設定でApple Intelligenceがオフ
-    case notReady             // モデル準備中
-    case requiresOSUpdate     // iOS 18.1未満
+    case deviceNotSupported
+    case notEnabled
+    case notReady
+    case requiresOSUpdate
 
     var message: String {
         switch self {
-        case .available:
-            return ""
-        case .deviceNotSupported:
-            return "Apple Intelligenceに対応していないデバイスです。iPhone 15 Pro以降が必要です。"
-        case .notEnabled:
-            return "Apple Intelligenceが有効になっていません。設定 > Apple IntelligenceとSiri からオンにしてください。"
-        case .notReady:
-            return "Apple Intelligenceのモデルを準備中です。しばらく待ってから再度お試しください。"
-        case .requiresOSUpdate:
-            return "iOS 18.1以降が必要です。設定 > 一般 > ソフトウェアアップデート から更新してください。"
+        case .available:          return ""
+        case .deviceNotSupported: return "Apple Intelligenceに対応していないデバイスです。iPhone 15 Pro以降が必要です。"
+        case .notEnabled:         return "Apple Intelligenceが有効になっていません。設定 > Apple IntelligenceとSiri からオンにしてください。"
+        case .notReady:           return "Apple Intelligenceのモデルを準備中です。しばらくお待ちください。"
+        case .requiresOSUpdate:   return "iOS 18.1以降（日本語はiOS 18.4以降）が必要です。"
         }
     }
 

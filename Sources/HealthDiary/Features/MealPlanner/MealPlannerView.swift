@@ -292,18 +292,12 @@ struct MealPlanDetailView: View {
     private func regenerateAll() async {
         isRegenerating = true
         regenerationError = nil
-        // 既存の DayPlan をすべて削除
+        // 既存の DayPlan をすべて削除してから再生成
         plan.days.forEach { context.delete($0) }
         plan.days.removeAll()
         do {
             let request = makeRequest()
-            let prompt = LLMPlanGenerator.shared.buildPublicPrompt(request: request)
-            let llmCtx = LLMContext.mealPlan(
-                days: request.numberOfDays,
-                familySize: request.familyProfile?.members.count ?? 1
-            )
-            let jsonText = try await LLMService.shared.generate(prompt: prompt, context: llmCtx)
-            try LLMPlanGenerator.shared.applyPlanJSON(jsonText, to: plan, request: request, context: context)
+            try await LLMPlanGenerator.shared.regenerate(plan: plan, request: request, context: context)
         } catch {
             regenerationError = error.localizedDescription
         }

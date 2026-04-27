@@ -29,6 +29,7 @@ Pods/
 .DS_Store
 .env
 
-# Bundled ML model (downloaded during CI, not committed)
-Sources/HealthDiary/Resources/model/**
-!Sources/HealthDiary/Resources/model/.gitkeep
+# Python venv / キャッシュ（scripts/ 以下）
+scripts/.venv/
+scripts/__pycache__/
+scripts/*.pyc
