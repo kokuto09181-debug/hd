@@ -107,7 +107,7 @@ struct SettingsView: View {
         case .deviceNotSupported:
             return "iPhone 15 Pro以降、またはiPad Pro (M4)以降が必要です。"
         case .requiresOSUpdate:
-            return "iOS 18.1以降（日本語はiOS 18.4以降）が必要です。"
+            return "iOS 26以降が必要です。"
         }
     }
 

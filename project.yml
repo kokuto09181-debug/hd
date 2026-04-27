@@ -2,13 +2,13 @@ name: HealthDiary
 options:
   bundleIdPrefix: com.healthdiary
   deploymentTarget:
-    iOS: "18.1"
+    iOS: "26.0"
 
 targets:
   HealthDiary:
     type: application
     platform: iOS
-    deploymentTarget: "18.1"
+    deploymentTarget: "26.0"
     sources:
       - path: Sources/HealthDiary
     settings:

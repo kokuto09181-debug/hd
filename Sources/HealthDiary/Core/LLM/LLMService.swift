@@ -1,14 +1,9 @@
 import Foundation
-// FoundationModels は Xcode 26 / iOS 26 以降でのみ利用可能。
-// canImport で囲むことで Xcode 16.x でもコンパイル可能にする。
-#if canImport(FoundationModels)
 import FoundationModels
-#endif
 
 // MARK: - LLMService
 // Apple Intelligence (FoundationModels) を使用。
-// デプロイターゲット iOS 18.1 だが FoundationModels の import 自体は
-// Xcode 26 以降が必要なため #if canImport で条件付きコンパイル。
+// デプロイターゲット iOS 26.0 のため #available ガード不要。
 //
 // 3つの生成メソッド:
 //   generate(prompt:context:)          → 文字列出力（汎用）
@@ -22,15 +17,12 @@ final class LLMService: ObservableObject {
     @Published var isLoading = false
 
     // チャットスレッドごとの会話セッション（アプリ起動中は保持）
-    // FoundationModels が利用不可の環境ではコンパイル対象外
-    #if canImport(FoundationModels)
     private var chatSessions: [UUID: LanguageModelSession] = [:]
-    #endif
 
     var availability: AIAvailability {
         #if targetEnvironment(simulator)
         return .available   // シミュレーターはスタブで対応
-        #elseif canImport(FoundationModels)
+        #else
         switch SystemLanguageModel.default.availability {
         case .available:
             return .available
@@ -41,9 +33,6 @@ final class LLMService: ObservableObject {
             default:                           return .notReady
             }
         }
-        #else
-        // Xcode 16.x など FoundationModels 非対応 SDK でのビルド
-        return .notReady
         #endif
     }
 
@@ -54,24 +43,20 @@ final class LLMService: ObservableObject {
     func generate(prompt: String, context: LLMContext) async throws -> String {
         #if targetEnvironment(simulator)
         return simulatorResponse(for: context)
-        #elseif canImport(FoundationModels)
+        #else
         guard availability.isAvailable else { return availability.message }
         isLoading = true
         defer { isLoading = false }
         let session = LanguageModelSession(instructions: buildSystemPrompt(for: context))
         let response = try await session.respond(to: prompt)
         return response.content
-        #else
-        return availability.message
         #endif
     }
 
     // MARK: - 2. 型安全な構造化出力 (@Generable)
     // LLMPlanGenerator で献立を型安全に生成するために使用。
     // JSONパースが不要になり、出力形式の崩れによるクラッシュがなくなる。
-    // FoundationModels が利用できない環境ではコンパイル対象外。
 
-    #if canImport(FoundationModels)
     func generate<T: Generable>(
         prompt: String,
         context: LLMContext,
@@ -90,7 +75,6 @@ final class LLMService: ObservableObject {
         return response.content
         #endif
     }
-    #endif
 
     // MARK: - 3. 会話継続チャット（スレッドごとにセッションを保持）
     // 同じ threadID で呼ぶたびに同一セッションを使い、
@@ -103,7 +87,7 @@ final class LLMService: ObservableObject {
     ) async throws -> String {
         #if targetEnvironment(simulator)
         return "（シミュレーター）\(prompt.prefix(20))... に対するAIの返答です。"
-        #elseif canImport(FoundationModels)
+        #else
         guard availability.isAvailable else { return availability.message }
         isLoading = true
         defer { isLoading = false }
@@ -120,16 +104,12 @@ final class LLMService: ObservableObject {
 
         let response = try await session.respond(to: prompt)
         return response.content
-        #else
-        return availability.message
         #endif
     }
 
     /// チャットスレッド削除時に呼ぶ。セッションを解放してメモリを回収する。
     func clearChatSession(for threadID: UUID) {
-        #if canImport(FoundationModels)
         chatSessions.removeValue(forKey: threadID)
-        #endif
     }
 
     // MARK: - Simulator Stub
@@ -220,7 +200,7 @@ enum AIAvailability {
         case .deviceNotSupported: return "Apple Intelligenceに対応していないデバイスです。iPhone 15 Pro以降が必要です。"
         case .notEnabled:         return "Apple Intelligenceが有効になっていません。設定 > Apple IntelligenceとSiri からオンにしてください。"
         case .notReady:           return "Apple Intelligenceのモデルを準備中です。しばらくお待ちください。"
-        case .requiresOSUpdate:   return "iOS 18.1以降（日本語はiOS 18.4以降）が必要です。"
+        case .requiresOSUpdate:   return "iOS 26以降が必要です。"
         }
     }
 

@@ -1,16 +1,11 @@
 import Foundation
-import SwiftData
-// FoundationModels は Xcode 26 / iOS 26 以降でのみ利用可能。
-// Xcode 16.x (macos-15 CI) でもコンパイルできるよう canImport で条件分岐。
-#if canImport(FoundationModels)
 import FoundationModels
-#endif
+import SwiftData
 
-// MARK: - 構造化出力型
-// Xcode 26 以降では @Generable + @Guide で型安全な生成。
-// Xcode 16.x (CI) では同名の素の struct を定義してコンパイルを通す。
+// MARK: - @Generable 構造化出力型
+// Apple Intelligence が型安全に返す出力。JSONパース不要。
+// デプロイターゲット iOS 26.0 のため #available ガード不要。
 
-#if canImport(FoundationModels)
 @Generable
 struct MealPlanOutput {
     @Guide(description: "生成した日数分の献立リスト（指定日数と同じ要素数）")
@@ -30,37 +25,6 @@ struct DayMealOutput {
     @Guide(description: "間食の料理名。このスロットを使わない日はnil")
     var snack: String?
 }
-
-#else
-// Xcode 16.x / FoundationModels 非対応環境向けスタブ型
-// CI ビルドおよびシミュレータービルドで同じ型を参照できるようにする
-
-struct MealPlanOutput {
-    var days: [DayMealOutput]
-    init(days: [DayMealOutput]) { self.days = days }
-}
-
-struct DayMealOutput {
-    var date: String
-    var breakfast: String?
-    var lunch: String?
-    var dinner: String?
-    var snack: String?
-    init(
-        date: String,
-        breakfast: String? = nil,
-        lunch: String? = nil,
-        dinner: String? = nil,
-        snack: String? = nil
-    ) {
-        self.date = date
-        self.breakfast = breakfast
-        self.lunch = lunch
-        self.dinner = dinner
-        self.snack = snack
-    }
-}
-#endif
 
 // MARK: - LLMPlanGenerator
 
@@ -137,14 +101,12 @@ final class LLMPlanGenerator {
         appendMeals(from: output, to: dayPlan, context: context)
     }
 
-    // MARK: - Private: LLM / Simulator / Fallback 分岐
+    // MARK: - Private: LLM / Simulator 分岐
 
     private func fetchOutput(for request: GenerationRequest) async throws -> MealPlanOutput {
         #if targetEnvironment(simulator)
-        // シミュレーター: スタブデータを返す
         return buildSimulatorOutput(request: request)
-        #elseif canImport(FoundationModels)
-        // 実機 + Xcode 26 以降: Apple Intelligence で型安全生成
+        #else
         let prompt = buildPrompt(request: request)
         let llmCtx = LLMContext.mealPlan(
             days: request.numberOfDays,
@@ -153,9 +115,6 @@ final class LLMPlanGenerator {
         return try await LLMService.shared.generate(
             prompt: prompt, context: llmCtx, generating: MealPlanOutput.self
         )
-        #else
-        // Xcode 16.x (CI デバイスビルド): スタブデータで代替
-        return buildSimulatorOutput(request: request)
         #endif
     }
 
@@ -166,7 +125,7 @@ final class LLMPlanGenerator {
     ) async throws -> DayMealOutput {
         #if targetEnvironment(simulator)
         return buildSimulatorDayOutput(for: dayPlan.date)
-        #elseif canImport(FoundationModels)
+        #else
         let prompt = buildDayPrompt(dayPlan: dayPlan, plan: plan, request: request)
         let llmCtx = LLMContext.mealPlan(
             days: 1,
@@ -175,8 +134,6 @@ final class LLMPlanGenerator {
         return try await LLMService.shared.generate(
             prompt: prompt, context: llmCtx, generating: DayMealOutput.self
         )
-        #else
-        return buildSimulatorDayOutput(for: dayPlan.date)
         #endif
     }
 
@@ -320,7 +277,7 @@ final class LLMPlanGenerator {
         }.joined(separator: "\n")
     }
 
-    // MARK: - Simulator / Fallback Stubs
+    // MARK: - Simulator Stubs
 
     private func buildSimulatorOutput(request: GenerationRequest) -> MealPlanOutput {
         let cal = Calendar.current
