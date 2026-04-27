@@ -30,6 +30,20 @@ jobs:
           key: ${{ runner.os }}-brew-xcodegen
           restore-keys: ${{ runner.os }}-brew-
 
+      # --- Xcode 選択 ---
+      # FoundationModels は Xcode 26 以降が必要。
+      # ランナーに Xcode 26 以降があれば選択し、なければ既定のまま。
+      # コード側も #if canImport(FoundationModels) で保護済みのため
+      # Xcode 16.x でも必ずコンパイルが通る。
+      - name: Select latest available Xcode
+        run: |
+          LATEST=$(ls /Applications/ | grep -E "^Xcode_[0-9]" | sort -V | tail -1)
+          if [ -n "$LATEST" ]; then
+            sudo xcode-select -s "/Applications/${LATEST}/Contents/Developer"
+            echo "Selected Xcode: $LATEST"
+          fi
+          xcodebuild -version
+
       # --- セットアップ ---
       - name: Install tools
         run: |
@@ -38,10 +52,6 @@ jobs:
 
       - name: Create Recipe Database
         run: python3 scripts/create_db.py
-
-      # シミュレータビルドはモデル不要 — 空ディレクトリだけ用意
-      - name: Create model directory placeholder
-        run: mkdir -p Sources/HealthDiary/Resources/model
 
       - name: Generate Xcode project
         run: xcodegen generate
