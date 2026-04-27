@@ -762,7 +762,14 @@ def main():
     out = os.path.abspath(OUT_PATH)
     os.makedirs(os.path.dirname(out), exist_ok=True)
 
+    # スクレイピング済みのDBが既にある場合は上書きしない
     if os.path.exists(out):
+        con = sqlite3.connect(out)
+        count = con.execute("SELECT COUNT(*) FROM recipes").fetchone()[0]
+        con.close()
+        if count > len(RECIPES):
+            print(f"Existing database has {count} recipes (seed: {len(RECIPES)}), skipping.")
+            return
         os.remove(out)
 
     con = sqlite3.connect(out)
