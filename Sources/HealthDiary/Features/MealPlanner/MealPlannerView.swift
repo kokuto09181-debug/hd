@@ -445,7 +445,7 @@ struct DayPlanView: View {
                         showingAddMeal = true
                     } label: {
                         Label("料理を追加", systemImage: "plus.circle")
-                            .foregroundStyle(.accentColor)
+                            .foregroundStyle(.tint)
                     }
 
                     Button {
