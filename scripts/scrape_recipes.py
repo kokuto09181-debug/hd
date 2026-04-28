@@ -255,7 +255,7 @@ def scrape_recipe(url: str, session) -> dict | None:
     calories = estimate_calories(main, method)
 
     return {
-        'name': name, 'url': url,
+        'name': name, 'url': resp.url,  # final URL after any redirects
         'cuisine_type': cuisine, 'main_ingredient': main,
         'cooking_method': method, 'calories_per_serving': calories,
         'serving_size': serving_size, 'ingredients': ingredients
