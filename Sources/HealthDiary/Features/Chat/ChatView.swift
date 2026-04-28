@@ -5,6 +5,8 @@ struct ChatView: View {
     @Query(sort: \ChatThread.updatedAt, order: .reverse) private var threads: [ChatThread]
     @Environment(\.modelContext) private var context
     @State private var showingNewChat = false
+    /// 新規作成したスレッドへ自動遷移するために保持
+    @State private var pendingThread: ChatThread?
 
     var body: some View {
         NavigationStack {
@@ -22,10 +24,17 @@ struct ChatView: View {
                     Button { showingNewChat = true } label: {
                         Image(systemName: "square.and.pencil")
                     }
+                    .accessibilityLabel("新規相談")
                 }
             }
             .sheet(isPresented: $showingNewChat) {
-                NewChatView()
+                NewChatView { created in
+                    pendingThread = created
+                }
+            }
+            // 作成後にスレッド画面へ自動遷移
+            .navigationDestination(item: $pendingThread) { thread in
+                ChatThreadView(thread: thread)
             }
         }
     }
@@ -126,6 +135,8 @@ private struct ChatThreadRow: View {
 // MARK: - New Chat
 
 struct NewChatView: View {
+    let onCreated: (ChatThread) -> Void
+
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @State private var selectedContext: ChatContext = .free
@@ -173,6 +184,7 @@ struct NewChatView: View {
         context.insert(userMsg)
         thread.messages.append(userMsg)
 
+        onCreated(thread)
         dismiss()
     }
 }

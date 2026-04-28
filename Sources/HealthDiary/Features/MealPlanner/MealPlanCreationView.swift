@@ -49,6 +49,9 @@ struct MealPlanCreationView: View {
                     Label(warning, systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.orange)
                         .font(.caption)
+                    Text("既存プランと重なりますが作成できます")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
             if let error = generationError {
@@ -169,7 +172,7 @@ struct MealPlanCreationView: View {
                     Spacer()
                 }
             }
-            .disabled(weekdaySlots.isEmpty || overlapWarning != nil)
+            .disabled(weekdaySlots.isEmpty)
         }
     }
 

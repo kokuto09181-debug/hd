@@ -41,7 +41,7 @@ struct MealPlannerView: View {
                     Button {
                         showingCreation = true
                     } label: {
-                        Label("次の献立を作る", systemImage: "plus")
+                        Label("新しい献立を作る", systemImage: "plus")
                     }
                 }
             }
@@ -145,7 +145,7 @@ private struct PlanRow: View {
         .padding(.vertical, 2)
     }
     private var statusBadge: some View {
-        Text(plan.status == .shopping ? "買い出し済み" : "下書き")
+        Text(plan.status == .shopping ? "確定済み" : "下書き")
             .font(.caption2)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
@@ -187,16 +187,25 @@ struct MealPlanDetailView: View {
                     )
                 }
             }
+
+            // 下書きのときだけ「確定して開始」ボタンを表示
+            if plan.status == .draft && !isRegenerating {
+                confirmBar
+            }
         }
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
-        .confirmationDialog("この献立を全部作り直しますか？", isPresented: $showingRegenerateConfirm, titleVisibility: .visible) {
-            Button("同じ条件で再生成", role: .destructive) { Task { await regenerateAll() } }
+        .confirmationDialog("この献立を確定しますか？\n確定後は買い出しリストが使えるようになります",
+                            isPresented: $showingShoppingConfirm,
+                            titleVisibility: .visible) {
+            Button("献立を確定する") { plan.status = .shopping }
             Button("キャンセル", role: .cancel) {}
         }
-        .confirmationDialog("買い出しが完了したら確定してください", isPresented: $showingShoppingConfirm, titleVisibility: .visible) {
-            Button("買い出し済みにする") { plan.status = .shopping }
+        .confirmationDialog("この献立を全部作り直しますか？",
+                            isPresented: $showingRegenerateConfirm,
+                            titleVisibility: .visible) {
+            Button("同じ条件で再生成", role: .destructive) { Task { await regenerateAll() } }
             Button("キャンセル", role: .cancel) {}
         }
         .alert("再生成エラー", isPresented: Binding(
@@ -210,6 +219,28 @@ struct MealPlanDetailView: View {
         .gesture(swipeGesture)
     }
 
+    // MARK: - 確定バー（下書き時に底部表示）
+
+    private var confirmBar: some View {
+        VStack(spacing: 0) {
+            Divider()
+            Button {
+                showingShoppingConfirm = true
+            } label: {
+                HStack {
+                    Image(systemName: "checkmark.seal.fill")
+                    Text("この献立を確定する")
+                        .fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.accentColor)
+                .foregroundStyle(.white)
+            }
+        }
+        .background(Color(.systemBackground))
+    }
+
     private var navigationTitle: String {
         let fmt = DateFormatter()
         fmt.dateFormat = "M/d"
@@ -218,9 +249,9 @@ struct MealPlanDetailView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        if plan.status == .draft {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
+        ToolbarItem(placement: .topBarTrailing) {
+            Menu {
+                if plan.status == .draft {
                     Button {
                         showingRegenerateConfirm = true
                     } label: {
@@ -229,11 +260,11 @@ struct MealPlanDetailView: View {
                     Button {
                         showingShoppingConfirm = true
                     } label: {
-                        Label("買い出し済みにする", systemImage: "cart.badge.checkmark")
+                        Label("献立を確定する", systemImage: "checkmark.seal")
                     }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
                 }
+            } label: {
+                Image(systemName: "ellipsis.circle")
             }
         }
     }
@@ -292,7 +323,6 @@ struct MealPlanDetailView: View {
     private func regenerateAll() async {
         isRegenerating = true
         regenerationError = nil
-        // 既存の DayPlan をすべて削除してから再生成
         plan.days.forEach { context.delete($0) }
         plan.days.removeAll()
         do {
@@ -356,11 +386,15 @@ struct DayPlanView: View {
     let onRegenerateDay: () -> Void
     @Environment(\.modelContext) private var context
     @State private var mealToEdit: PlannedMeal? = nil
+    @State private var showingAddMeal = false
 
-    private var sortedMeals: [PlannedMeal] {
+    /// 食事時間ごとにグループ化
+    private var mealsByType: [(MealType, [PlannedMeal])] {
         let order: [MealType] = [.breakfast, .lunch, .dinner, .snack]
-        return dayPlan.meals.sorted { a, b in
-            (order.firstIndex(of: a.mealType) ?? 99) < (order.firstIndex(of: b.mealType) ?? 99)
+        let dict = Dictionary(grouping: dayPlan.meals) { $0.mealType }
+        return order.compactMap { type in
+            guard let meals = dict[type], !meals.isEmpty else { return nil }
+            return (type, meals)
         }
     }
 
@@ -370,33 +404,48 @@ struct DayPlanView: View {
 
     var body: some View {
         List {
-            Section {
-                ForEach(sortedMeals) { meal in
-                    MealSlotRow(meal: meal)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            if canEdit { mealToEdit = meal }
-                        }
-                        .opacity(dayPlan.isPast ? 0.5 : 1.0)
+            // 食事時間ごとにセクション表示（複数品対応）
+            ForEach(mealsByType, id: \.0) { mealType, meals in
+                Section {
+                    ForEach(meals) { meal in
+                        MealDishRow(meal: meal)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if canEdit { mealToEdit = meal }
+                            }
+                            .opacity(dayPlan.isPast ? 0.6 : 1.0)
+                    }
+                    .onDelete(perform: canEdit ? { indexSet in
+                        indexSet.forEach { context.delete(meals[$0]) }
+                    } : nil)
+                } header: {
+                    Text(mealType.rawValue)
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.primary)
                 }
-                .onDelete { indexSet in
-                    guard canEdit else { return }
-                    indexSet.forEach { context.delete(sortedMeals[$0]) }
+            }
+
+            // 未設定スロット（LLMが生成したがrecipeIDがないもの）の案内
+            let unlinked = dayPlan.meals.filter { $0.recipeName != nil && $0.recipeID == nil }
+            if !unlinked.isEmpty {
+                Section {
+                    HStack {
+                        Image(systemName: "exclamationmark.circle")
+                            .foregroundStyle(.orange)
+                        Text("\(unlinked.count)品のレシピがDB未登録です。タップして手動設定できます")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
             if canEdit {
                 Section {
-                    Menu {
-                        ForEach(MealType.allCases, id: \.self) { type in
-                            Button(type.rawValue) {
-                                let meal = PlannedMeal(mealType: type)
-                                context.insert(meal)
-                                dayPlan.meals.append(meal)
-                            }
-                        }
+                    Button {
+                        showingAddMeal = true
                     } label: {
-                        Label("食事を追加", systemImage: "plus.circle")
+                        Label("料理を追加", systemImage: "plus.circle")
+                            .foregroundStyle(.accentColor)
                     }
 
                     Button {
@@ -410,40 +459,147 @@ struct DayPlanView: View {
         .sheet(item: $mealToEdit) { meal in
             MealSlotEditView(meal: meal)
         }
+        .sheet(isPresented: $showingAddMeal) {
+            AddMealSheet(dayPlan: dayPlan)
+        }
     }
 }
 
-// MARK: - Meal Slot Row
+// MARK: - 料理追加シート
 
-private struct MealSlotRow: View {
+struct AddMealSheet: View {
+    let dayPlan: DayPlan
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var selectedMealType: MealType = .dinner
+    @State private var showingRecipeSearch = false
+    @State private var customName = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("食事の時間帯") {
+                    Picker("時間帯", selection: $selectedMealType) {
+                        ForEach(MealType.allCases, id: \.self) {
+                            Text($0.rawValue).tag($0)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                Section("レシピをDBから選ぶ") {
+                    Button {
+                        showingRecipeSearch = true
+                    } label: {
+                        Label("レシピを検索して追加", systemImage: "magnifyingglass")
+                    }
+                }
+
+                Section("または料理名を直接入力") {
+                    HStack {
+                        TextField("例: 鶏の唐揚げ", text: $customName)
+                        if !customName.isEmpty {
+                            Button("追加") { addCustom() }
+                                .font(.callout)
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("料理を追加")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { dismiss() }
+                }
+            }
+            .sheet(isPresented: $showingRecipeSearch) {
+                RecipeSearchView { recipe in
+                    addFromRecipe(recipe)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    private func addFromRecipe(_ recipe: RecipeRecord) {
+        let meal = PlannedMeal(mealType: selectedMealType)
+        meal.recipeID   = recipe.id
+        meal.recipeName = recipe.name
+        meal.recipeURL  = recipe.url.isEmpty ? nil : recipe.url
+        meal.notes      = ""
+        context.insert(meal)
+        dayPlan.meals.append(meal)
+        dismiss()
+    }
+
+    private func addCustom() {
+        let name = customName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        let meal = PlannedMeal(mealType: selectedMealType)
+        meal.recipeName = name
+        // DBからも探してみる
+        if let recipe = RecipeDatabase.shared.searchByName(name) {
+            meal.recipeID   = recipe.id
+            meal.recipeName = recipe.name
+            meal.recipeURL  = recipe.url.isEmpty ? nil : recipe.url
+        }
+        meal.notes = ""
+        context.insert(meal)
+        dayPlan.meals.append(meal)
+        dismiss()
+    }
+}
+
+// MARK: - Meal Dish Row（1品＝1行）
+
+private struct MealDishRow: View {
     let meal: PlannedMeal
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(meal.mealType.rawValue)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(width: 36, alignment: .leading)
             Text(visualEmoji)
-                .font(.title2)
+                .font(.title3)
+                .frame(width: 30)
+
             VStack(alignment: .leading, spacing: 2) {
                 switch meal.mealOption {
                 case .homeCooked:
-                    Text(meal.recipeName ?? "未設定")
-                        .font(.body)
-                        .foregroundStyle(meal.recipeName == nil ? .secondary : .primary)
+                    if let name = meal.recipeName {
+                        Text(name)
+                            .font(.body)
+                        if meal.recipeID == nil {
+                            Text("レシピ未登録")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                        }
+                    } else {
+                        Text("未設定")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                    }
                 case .diningOut:
-                    Text("外食").font(.body).foregroundStyle(.secondary)
+                    Text("外食")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
                 case .skipped:
-                    Text("スキップ").font(.body).foregroundStyle(.tertiary)
+                    Text("スキップ")
+                        .font(.body)
+                        .foregroundStyle(.tertiary)
                 }
             }
             Spacer()
+
             if meal.leftoverSourceMealID != nil {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
+            Image(systemName: "chevron.right")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 2)
     }
@@ -455,11 +611,11 @@ private struct MealSlotRow: View {
         if name.contains("肉") || name.contains("ステーキ") { return "🥩" }
         if name.contains("魚") || name.contains("刺身") || name.contains("寿司") { return "🐟" }
         if name.contains("麺") || name.contains("パスタ") || name.contains("ラーメン") { return "🍜" }
-        if name.contains("カレー") { return "🍛" }
-        if name.contains("サラダ") { return "🥗" }
+        if name.contains("カレー")   { return "🍛" }
+        if name.contains("サラダ")   { return "🥗" }
         if name.contains("スープ") || name.contains("汁") { return "🍲" }
-        if name.contains("丼") || name.contains("ご飯") { return "🍚" }
-        if name.contains("パン") { return "🍞" }
+        if name.contains("丼") || name.contains("ご飯")   { return "🍚" }
+        if name.contains("パン")     { return "🍞" }
         if name.contains("卵") || name.contains("オムレツ") { return "🍳" }
         if name.isEmpty { return "❓" }
         return "🍽️"

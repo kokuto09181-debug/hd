@@ -3,6 +3,7 @@ import SwiftUI
 struct MealSlotEditView: View {
     @Bindable var meal: PlannedMeal
     @Environment(\.dismiss) private var dismiss
+    @State private var showingRecipeSearch = false
 
     var body: some View {
         NavigationStack {
@@ -16,7 +17,6 @@ struct MealSlotEditView: View {
                     .pickerStyle(.segmented)
                 }
 
-                // スキップを他オプションと分離（ランダム対象外）
                 Section("オプション") {
                     Picker("", selection: $meal.mealOption) {
                         Text(MealOption.homeCooked.rawValue).tag(MealOption.homeCooked)
@@ -33,26 +33,41 @@ struct MealSlotEditView: View {
                 if meal.mealOption == .homeCooked {
                     Section("レシピ") {
                         if let name = meal.recipeName {
-                            VStack(alignment: .leading, spacing: 8) {
-                                // ビジュアル - 料理系統アイコン
-                                HStack(spacing: 12) {
-                                    recipeIcon
-                                        .font(.system(size: 40))
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(name)
-                                            .font(.headline)
-                                        if let urlString = meal.recipeURL, let url = URL(string: urlString) {
-                                            Link("レシピを見る", destination: url)
-                                                .font(.caption)
-                                        }
+                            HStack(spacing: 12) {
+                                Text(recipeEmoji(for: name))
+                                    .font(.title2)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(name)
+                                        .font(.headline)
+                                    if let urlString = meal.recipeURL, let url = URL(string: urlString) {
+                                        Link("レシピを見る ↗", destination: url)
+                                            .font(.caption)
                                     }
-                                    Spacer()
                                 }
+                                Spacer()
                             }
                             .padding(.vertical, 4)
+
+                            Button {
+                                showingRecipeSearch = true
+                            } label: {
+                                Label("レシピを変更", systemImage: "arrow.triangle.2.circlepath")
+                                    .font(.subheadline)
+                            }
                         } else {
-                            Text("レシピ未設定")
-                                .foregroundStyle(.secondary)
+                            Button {
+                                showingRecipeSearch = true
+                            } label: {
+                                Label("DBからレシピを選ぶ", systemImage: "magnifyingglass")
+                                    .font(.subheadline)
+                            }
+
+                            // DBにないレシピは名前を直接入力
+                            TextField("または料理名を入力", text: Binding(
+                                get: { meal.recipeName ?? "" },
+                                set: { meal.recipeName = $0.isEmpty ? nil : $0 }
+                            ))
+                            .foregroundStyle(.primary)
                         }
                     }
                 }
@@ -69,24 +84,26 @@ struct MealSlotEditView: View {
                     Button("完了") { dismiss() }
                 }
             }
+            .sheet(isPresented: $showingRecipeSearch) {
+                RecipeSearchView { recipe in
+                    meal.recipeID   = recipe.id
+                    meal.recipeName = recipe.name
+                    meal.recipeURL  = recipe.url.isEmpty ? nil : recipe.url
+                }
+            }
         }
     }
 
-    // レシピ名から推測してアイコン表示（仮ビジュアル）
-    private var recipeIcon: some View {
-        let name = meal.recipeName ?? ""
-        let (emoji, color): (String, Color) = {
-            if name.contains("肉") || name.contains("ステーキ") || name.contains("焼肉") { return ("🥩", .red) }
-            if name.contains("魚") || name.contains("刺身") || name.contains("寿司") { return ("🐟", .blue) }
-            if name.contains("麺") || name.contains("パスタ") || name.contains("ラーメン") { return ("🍜", .orange) }
-            if name.contains("カレー") { return ("🍛", .yellow) }
-            if name.contains("サラダ") { return ("🥗", .green) }
-            if name.contains("スープ") || name.contains("汁") { return ("🍲", .brown) }
-            if name.contains("丼") || name.contains("ご飯") { return ("🍚", .pink) }
-            if name.contains("パン") { return ("🍞", .yellow) }
-            if name.contains("卵") || name.contains("オムレツ") { return ("🍳", .yellow) }
-            return ("🍽️", .gray)
-        }()
-        return Text(emoji).foregroundStyle(color)
+    private func recipeEmoji(for name: String) -> String {
+        if name.contains("肉") || name.contains("ステーキ") { return "🥩" }
+        if name.contains("魚") || name.contains("刺身")    { return "🐟" }
+        if name.contains("麺") || name.contains("ラーメン") || name.contains("パスタ") { return "🍜" }
+        if name.contains("カレー")   { return "🍛" }
+        if name.contains("サラダ")   { return "🥗" }
+        if name.contains("スープ") || name.contains("汁") { return "🍲" }
+        if name.contains("丼") || name.contains("ご飯")   { return "🍚" }
+        if name.contains("パン")     { return "🍞" }
+        if name.contains("卵") || name.contains("オムレツ") { return "🍳" }
+        return "🍽️"
     }
 }

@@ -114,6 +114,46 @@ final class RecipeDatabase {
         return nil
     }
 
+    /// フリーテキスト検索（レシピ選択UI用）
+    /// queryが空の場合はランダムで件数分返す
+    func searchRecipes(query: String, limit: Int = 30) -> [RecipeRecord] {
+        guard let db else { return [] }
+        let sql: String
+        if query.trimmingCharacters(in: .whitespaces).isEmpty {
+            sql = """
+                SELECT id, name, url, cuisine_type, main_ingredient, cooking_method,
+                       calories_per_serving, serving_size
+                FROM recipes ORDER BY name ASC LIMIT \(limit)
+            """
+            var statement: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return [] }
+            defer { sqlite3_finalize(statement) }
+            var recipes: [RecipeRecord] = []
+            while sqlite3_step(statement) == SQLITE_ROW {
+                if let r = parseRecipeRow(statement) { recipes.append(r) }
+            }
+            return recipes
+        } else {
+            let sql2 = """
+                SELECT id, name, url, cuisine_type, main_ingredient, cooking_method,
+                       calories_per_serving, serving_size
+                FROM recipes
+                WHERE name LIKE '%' || ? || '%'
+                ORDER BY LENGTH(name) ASC LIMIT ?
+            """
+            var statement: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql2, -1, &statement, nil) == SQLITE_OK else { return [] }
+            defer { sqlite3_finalize(statement) }
+            sqlite3_bind_text(statement, 1, query, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_int(statement, 2, Int32(limit))
+            var recipes: [RecipeRecord] = []
+            while sqlite3_step(statement) == SQLITE_ROW {
+                if let r = parseRecipeRow(statement) { recipes.append(r) }
+            }
+            return recipes
+        }
+    }
+
     /// IDでレシピを1件取得（JSONパース後の照合用）
     func findByID(_ id: String) -> RecipeRecord? {
         guard let db else { return nil }
