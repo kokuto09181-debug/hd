@@ -113,20 +113,42 @@ final class MealPlanEngine {
 
         for day in plan.days {
             for meal in day.meals {
-                guard let recipeID = meal.recipeID, let recipeName = meal.recipeName else { continue }
-                let ingredients = RecipeDatabase.shared.fetchIngredients(for: recipeID)
-                for ing in ingredients {
-                    let canonical = normService.normalize(ing.name, aliases: aliases)
-                    let key = "\(canonical)_\(ing.unit)"
-                    if aggregated[key] != nil {
-                        aggregated[key]!.totalAmount += ing.amount
-                        aggregated[key]!.usedInRecipes.insert(recipeName)
-                    } else {
+                // スキップ・外食は買い出し不要
+                guard meal.mealOption == .homeCooked,
+                      let recipeName = meal.recipeName else { continue }
+
+                // recipeID が設定されていれば優先、なければ名前でDB検索してフォールバック
+                let resolvedID = meal.recipeID
+                    ?? RecipeDatabase.shared.searchByName(recipeName)?.id
+
+                if let recipeID = resolvedID {
+                    // DBレシピの食材を集計
+                    let ingredients = RecipeDatabase.shared.fetchIngredients(for: recipeID)
+                    for ing in ingredients {
+                        let canonical = normService.normalize(ing.name, aliases: aliases)
+                        let key = "\(canonical)_\(ing.unit)"
+                        if aggregated[key] != nil {
+                            aggregated[key]!.totalAmount += ing.amount
+                            aggregated[key]!.usedInRecipes.insert(recipeName)
+                        } else {
+                            aggregated[key] = AggregatedIngredient(
+                                name: canonical,
+                                totalAmount: ing.amount,
+                                unit: ing.unit,
+                                category: ing.category,
+                                usedInRecipes: [recipeName]
+                            )
+                        }
+                    }
+                } else {
+                    // DB未登録: 料理名を「食材要確認」アイテムとして追加
+                    let key = "UNLINKED_\(recipeName)"
+                    if aggregated[key] == nil {
                         aggregated[key] = AggregatedIngredient(
-                            name: canonical,
-                            totalAmount: ing.amount,
-                            unit: ing.unit,
-                            category: ing.category,
+                            name: recipeName,
+                            totalAmount: 0,
+                            unit: "※食材要確認",
+                            category: .other,
                             usedInRecipes: [recipeName]
                         )
                     }

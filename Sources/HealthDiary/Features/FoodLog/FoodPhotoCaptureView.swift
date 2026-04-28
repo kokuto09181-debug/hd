@@ -46,11 +46,13 @@ struct FoodPhotoCaptureView: View {
                     Button("キャンセル") { dismiss() }
                 }
             }
-            .sheet(isPresented: $showingCamera) {
+            // UIImagePickerController はフルスクリーン提示が必須（.sheet では動作しない）
+            .fullScreenCover(isPresented: $showingCamera) {
                 CameraPickerView { image in
                     capturedImage = image
                     analyze(image)
                 }
+                .ignoresSafeArea()
             }
             .onChange(of: selectedPhoto) { _, item in
                 Task {

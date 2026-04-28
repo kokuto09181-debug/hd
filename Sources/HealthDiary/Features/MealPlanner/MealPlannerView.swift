@@ -8,13 +8,9 @@ struct MealPlannerView: View {
     @Environment(\.modelContext) private var context
     @State private var showingCreation = false
 
-    private var activePlan: MealPlan? {
-        let today = Calendar.current.startOfDay(for: Date())
-        return allPlans.first {
-            $0.status == .shopping &&
-            Calendar.current.startOfDay(for: $0.startDate) <= today &&
-            Calendar.current.startOfDay(for: $0.endDate) >= today
-        }
+    /// 確定済みプラン（日程に関わらず全件表示）
+    private var confirmedPlans: [MealPlan] {
+        allPlans.filter { $0.status == .shopping }
     }
 
     private var draftPlans: [MealPlan] {
@@ -53,10 +49,16 @@ struct MealPlannerView: View {
 
     private var planList: some View {
         List {
-            if let active = activePlan {
-                Section("実行中") {
-                    NavigationLink { MealPlanDetailView(plan: active) } label: {
-                        PlanRow(plan: active)
+            // 確定済み: 日程を問わず全件表示
+            if !confirmedPlans.isEmpty {
+                Section("確定済み") {
+                    ForEach(confirmedPlans) { plan in
+                        NavigationLink { MealPlanDetailView(plan: plan) } label: {
+                            PlanRow(plan: plan)
+                        }
+                    }
+                    .onDelete { indexSet in
+                        indexSet.forEach { context.delete(confirmedPlans[$0]) }
                     }
                 }
             }
@@ -216,7 +218,6 @@ struct MealPlanDetailView: View {
         } message: {
             Text(regenerationError ?? "")
         }
-        .gesture(swipeGesture)
     }
 
     // MARK: - 確定バー（下書き時に底部表示）
@@ -293,17 +294,6 @@ struct MealPlanDetailView: View {
                 .foregroundStyle(.secondary)
             Spacer()
         }
-    }
-
-    private var swipeGesture: some Gesture {
-        DragGesture(minimumDistance: 40)
-            .onEnded { value in
-                if value.translation.width < -40, selectedDayIndex < sortedDays.count - 1 {
-                    withAnimation { selectedDayIndex += 1 }
-                } else if value.translation.width > 40, selectedDayIndex > 0 {
-                    withAnimation { selectedDayIndex -= 1 }
-                }
-            }
     }
 
     private func makeRequest() -> LLMPlanGenerator.GenerationRequest {

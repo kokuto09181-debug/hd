@@ -357,6 +357,7 @@ private struct ShoppingItemRow: View {
 
     private var formattedAmount: String {
         let amount = item.totalAmount
+        guard amount > 0 else { return item.unit }   // 0 は "※食材要確認" などのメモ行
         if amount == amount.rounded() {
             return "\(Int(amount)) \(item.unit)"
         }
