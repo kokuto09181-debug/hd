@@ -91,6 +91,22 @@ final class RecipeDatabase {
         return recipes
     }
 
+    /// 完全一致でレシピを1件取得（LLM出力のDB照合用）
+    func findByName(_ name: String) -> RecipeRecord? {
+        guard let db, !name.isEmpty else { return nil }
+        let sql = """
+            SELECT id, name, url, cuisine_type, main_ingredient, cooking_method,
+                   calories_per_serving, serving_size
+            FROM recipes WHERE name = ? LIMIT 1
+        """
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, name, -1, SQLITE_TRANSIENT)
+        if sqlite3_step(statement) == SQLITE_ROW { return parseRecipeRow(statement) }
+        return nil
+    }
+
     /// LLMが生成した料理名からDBの近いレシピを検索。
     /// 「DBレシピ名がqueryに含まれる」または「queryがDBレシピ名に含まれる」でマッチ。
     /// 完全一致でなくてもよい（例: "鶏の唐揚げ定食" → DB "唐揚げ" にマッチ）。

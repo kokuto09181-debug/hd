@@ -16,13 +16,13 @@ struct MealPlanOutput {
 struct DayMealOutput {
     @Guide(description: "日付 YYYY-MM-DD形式")
     var date: String
-    @Guide(description: "朝食の料理名。このスロットを使わない日はnil")
+    @Guide(description: "朝食の料理名。プロンプトに記載されたレシピ一覧の名前と完全に一致させること。スロット不使用の日はnil")
     var breakfast: String?
-    @Guide(description: "昼食の料理名。このスロットを使わない日はnil")
+    @Guide(description: "昼食の料理名。プロンプトに記載されたレシピ一覧の名前と完全に一致させること。スロット不使用の日はnil")
     var lunch: String?
-    @Guide(description: "夕食の料理名。このスロットを使わない日はnil")
+    @Guide(description: "夕食の料理名。プロンプトに記載されたレシピ一覧の名前と完全に一致させること。スロット不使用の日はnil")
     var dinner: String?
-    @Guide(description: "間食の料理名。このスロットを使わない日はnil")
+    @Guide(description: "間食の料理名。プロンプトに記載されたレシピ一覧の名前と完全に一致させること。スロット不使用の日はnil")
     var snack: String?
 }
 
@@ -165,9 +165,9 @@ final class LLMPlanGenerator {
     }
 
     // MARK: - Meal Attachment
-    // LLMが生成した料理名を PlannedMeal に変換。
-    // DBに近いレシピがあれば紐付け（食材・カロリー利用可能になる）。
-    // なければ料理名だけ保存（ユーザーは後で手動編集できる）。
+    // LLMが返した料理名を PlannedMeal に変換。
+    // 完全一致 → 部分一致 → DB内ランダムの順で必ずDBレシピを紐付ける。
+    // DBにない料理名はアプリ内で扱えないため、フォールバックで必ず解決する。
 
     private func appendMeals(
         from output: DayMealOutput,
@@ -180,25 +180,50 @@ final class LLMPlanGenerator {
             (.dinner,    output.dinner),
             (.snack,     output.snack)
         ]
+        // 既にこの日に使ったレシピIDを除外リストに
+        var usedIDs = dayPlan.meals.compactMap { $0.recipeID }
+
         for (mealType, mealName) in slots {
             guard let mealName else { continue }
+
+            // 1. 完全一致
+            // 2. 部分一致（searchByName）
+            // 3. DB内からランダム（LLMが一覧外を返した場合の保険）
+            let recipe = RecipeDatabase.shared.findByName(mealName)
+                ?? RecipeDatabase.shared.searchByName(mealName)
+                ?? RecipeDatabase.shared.fetchRecipes(
+                    cuisineType: .japanese,
+                    mainIngredient: fallbackIngredient(for: mealType),
+                    excludeIDs: usedIDs
+                ).first
+                ?? RecipeDatabase.shared.fetchAll(limit: 30)
+                    .first { !usedIDs.contains($0.id) }
+
+            guard let recipe else { continue }   // DB が空の場合のみスキップ
+
+            usedIDs.append(recipe.id)
             let meal = PlannedMeal(mealType: mealType)
-            if let recipe = RecipeDatabase.shared.searchByName(mealName) {
-                meal.recipeID   = recipe.id
-                meal.recipeName = recipe.name
-                meal.recipeURL  = recipe.url.isEmpty ? nil : recipe.url
-            } else {
-                // DBに該当なし → LLMの料理名をそのまま使用
-                meal.recipeName = mealName
-            }
-            meal.notes = ""
+            meal.recipeID   = recipe.id
+            meal.recipeName = recipe.name
+            meal.recipeURL  = recipe.url.isEmpty ? nil : recipe.url
+            meal.notes      = ""
             context.insert(meal)
             dayPlan.meals.append(meal)
         }
     }
 
+    /// 食事タイプに合った主食材カテゴリを返す（ランダムフォールバック用）
+    private func fallbackIngredient(for mealType: MealType) -> MainIngredientCategory {
+        switch mealType {
+        case .breakfast: return .egg
+        case .lunch:     return [.vegetable, .other].randomElement()!
+        case .dinner:    return [.meat, .fish].randomElement()!
+        case .snack:     return .other
+        }
+    }
+
     // MARK: - Prompt Building
-    // レシピリストは含めない。LLMには「料理名の提案」だけをさせる。
+    // DBのレシピ名一覧をプロンプトに含め、LLMが必ずDB内から選ぶよう制約する。
 
     private func buildPrompt(request: GenerationRequest) -> String {
         let familyText = buildFamilyText(request.familyProfile)
@@ -208,17 +233,23 @@ final class LLMPlanGenerator {
         let recentNames = request.recentHistory.prefix(15).compactMap { $0.recipeName }
         let recentText = recentNames.isEmpty ? "なし" : recentNames.joined(separator: "、")
         let slotsText = buildSlotsText(request: request)
+        let recipeList = buildDBRecipeList(conditions: request.conditions)
 
         return """
         \(familyText)
         希望条件: \(conditionsText)
-        最近食べた料理（できるだけ重複を避けること）: \(recentText)
+        最近食べた料理（重複を避けること）: \(recentText)
 
         食事スロット:
         \(slotsText)
 
-        上記の条件で日本の家庭料理の献立を提案してください。
-        スロット一覧にないスロット（例: スロットがない日の朝食）はnilにしてください。
+        ── 選択可能なレシピ一覧（この中から名前を完全一致で選んでください）──
+        \(recipeList)
+        ─────────────────────────────────────────────────────────────
+
+        上記の一覧に記載されている料理名のみを使用して献立を提案してください。
+        一覧にない料理名は絶対に使わないでください。
+        スロット一覧にない食事（例: スロット指定のない日の朝食）はnilにしてください。
         """
     }
 
@@ -239,13 +270,56 @@ final class LLMPlanGenerator {
             .compactMap { $0.recipeName }
             .joined(separator: "、")
         let familyText = buildFamilyText(request.familyProfile)
+        let recipeList = buildDBRecipeList(conditions: request.conditions)
 
         return """
         \(familyText)
         \(dateStr)（スロット: \(slotStr)）の1日分の献立を提案してください。
         他の日で使った料理（重複不可）: \(usedNames.isEmpty ? "なし" : usedNames)
-        スロット外の食事はnilにしてください。
+
+        ── 選択可能なレシピ一覧（この中から名前を完全一致で選んでください）──
+        \(recipeList)
+        ─────────────────────────────────────────────────────────────
+
+        一覧の名前と完全一致する料理名のみを使用し、スロット外はnilにしてください。
         """
+    }
+
+    /// DB内から最大120件をランダムサンプリングしてプロンプト用リストを生成。
+    /// 「魚多め」「肉多め」などの条件があれば対応カテゴリを多く含める。
+    private func buildDBRecipeList(conditions: [String]) -> String {
+        let wantFish = conditions.contains { $0.contains("魚") }
+        let wantMeat = conditions.contains { $0.contains("肉") }
+
+        var collected: [RecipeRecord] = []
+        var usedIDs = Set<String>()
+
+        func add(_ records: [RecipeRecord], max: Int) {
+            for r in records.prefix(max) where !usedIDs.contains(r.id) {
+                collected.append(r)
+                usedIDs.insert(r.id)
+            }
+        }
+
+        // 条件に応じてカテゴリの配分を変える
+        let fishLimit  = wantFish ? 30 : 18
+        let meatLimit  = wantMeat ? 30 : 20
+        let veggLimit  = 18
+        let otherLimit = 15
+
+        add(RecipeDatabase.shared.fetchRecipes(cuisineType: .japanese, mainIngredient: .fish,      excludeIDs: [], limit: fishLimit), max: fishLimit)
+        add(RecipeDatabase.shared.fetchRecipes(cuisineType: .japanese, mainIngredient: .meat,      excludeIDs: [], limit: meatLimit), max: meatLimit)
+        add(RecipeDatabase.shared.fetchRecipes(cuisineType: .japanese, mainIngredient: .vegetable, excludeIDs: [], limit: veggLimit), max: veggLimit)
+        add(RecipeDatabase.shared.fetchRecipes(cuisineType: .japanese, mainIngredient: .egg,       excludeIDs: [], limit: 10), max: 10)
+        add(RecipeDatabase.shared.fetchRecipes(cuisineType: .japanese, mainIngredient: .tofu,      excludeIDs: [], limit: 8),  max: 8)
+        add(RecipeDatabase.shared.fetchRecipes(cuisineType: .japanese, mainIngredient: .other,     excludeIDs: [], limit: otherLimit), max: otherLimit)
+
+        // 120件未満なら補充
+        if collected.count < 80 {
+            add(RecipeDatabase.shared.fetchAll(limit: 100), max: 100 - collected.count)
+        }
+
+        return collected.map { $0.name }.joined(separator: "・")
     }
 
     private func buildFamilyText(_ profile: FamilyProfile?) -> String {

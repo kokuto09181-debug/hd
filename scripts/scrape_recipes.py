@@ -14,6 +14,11 @@ import uuid
 import os
 import sys
 
+# Windows cp932 でも安全に出力できるよう UTF-8 に強制
+if sys.stdout.encoding and sys.stdout.encoding.lower() not in ('utf-8', 'utf8'):
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+
 try:
     import requests
     from bs4 import BeautifulSoup
