@@ -476,20 +476,24 @@ def main():
     session = requests.Session()
     session.headers['User-Agent'] = 'HealthDiaryApp-RecipeScraper/1.0 (personal use)'
 
-    # サイト定義: (表示名, URL取得関数, スクレイパー関数)
+    # サイト定義: (表示名, URL取得関数, スクレイパー関数, 最大新規追加件数)
+    # None = 上限なし。大規模サイトは DB サイズ・処理時間を考慮して上限を設定。
     sites = [
-        ("白ごはん.com",         get_sirogohan_urls,    scrape_sirogohan),
-        ("みんなのきょうの料理",   get_kyounoryouri_urls, scrape_kyounoryouri),
-        ("レタスクラブ",           get_lettuceclub_urls,  scrape_lettuceclub),
+        ("白ごはん.com",         get_sirogohan_urls,    scrape_sirogohan,    None),
+        ("みんなのきょうの料理",   get_kyounoryouri_urls, scrape_kyounoryouri, 1000),
+        ("レタスクラブ",           get_lettuceclub_urls,  scrape_lettuceclub,  None),
     ]
 
     total_success = total_skipped = total_already = 0
 
-    for site_name, get_urls, scrape in sites:
+    for site_name, get_urls, scrape, max_new in sites:
         print(f"\n{'='*55}", flush=True)
         print(f"[{site_name}]", flush=True)
         all_urls  = get_urls()
         new_urls  = [u for u in all_urls if u not in existing_urls]
+        if max_new is not None and len(new_urls) > max_new:
+            print(f"  ※ 上限 {max_new} 件に制限 (合計 {len(new_urls)} 件中)", flush=True)
+            new_urls = new_urls[:max_new]
         already   = len(all_urls) - len(new_urls)
         total_already += already
         print(f"  新規: {len(new_urls)} 件 / 既存スキップ: {already} 件", flush=True)
