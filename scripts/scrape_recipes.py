@@ -40,13 +40,14 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS recipes (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    url TEXT NOT NULL UNIQUE,
+    url TEXT NOT NULL,
     cuisine_type TEXT NOT NULL,
     main_ingredient TEXT NOT NULL,
     cooking_method TEXT NOT NULL,
     calories_per_serving REAL NOT NULL,
     serving_size INTEGER NOT NULL
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_recipes_url ON recipes(url);
 CREATE TABLE IF NOT EXISTS ingredients (
     id TEXT PRIMARY KEY,
     recipe_id TEXT NOT NULL,
@@ -190,28 +191,36 @@ def parse_amount(text: str):
 
 def insert_recipe(con, recipe: dict) -> bool:
     """DB に1件挿入。URL重複は無視。成功したら True を返す。"""
-    try:
-        rid = str(uuid.uuid4())
-        con.execute(
-            "INSERT OR IGNORE INTO recipes VALUES (?,?,?,?,?,?,?,?)",
-            (rid, recipe['name'], recipe['url'],
-             recipe['cuisine_type'], recipe['main_ingredient'],
-             recipe['cooking_method'], recipe['calories_per_serving'],
-             recipe['serving_size'])
-        )
-        # INSERT OR IGNORE がスキップした場合 rowcount==0
-        if con.execute("SELECT changes()").fetchone()[0] == 0:
-            return False
-        for ing in recipe['ingredients']:
+    for attempt in range(3):
+        try:
+            rid = str(uuid.uuid4())
             con.execute(
-                "INSERT INTO ingredients VALUES (?,?,?,?,?,?)",
-                (str(uuid.uuid4()), rid, ing['name'],
-                 ing['amount'], ing['unit'], ing['category'])
+                "INSERT OR IGNORE INTO recipes VALUES (?,?,?,?,?,?,?,?)",
+                (rid, recipe['name'], recipe['url'],
+                 recipe['cuisine_type'], recipe['main_ingredient'],
+                 recipe['cooking_method'], recipe['calories_per_serving'],
+                 recipe['serving_size'])
             )
-        return True
-    except Exception as e:
-        print(f"  DB insert error: {e}", file=sys.stderr)
-        return False
+            # INSERT OR IGNORE がスキップした場合 rowcount==0
+            if con.execute("SELECT changes()").fetchone()[0] == 0:
+                return False
+            for ing in recipe['ingredients']:
+                con.execute(
+                    "INSERT INTO ingredients VALUES (?,?,?,?,?,?)",
+                    (str(uuid.uuid4()), rid, ing['name'],
+                     ing['amount'], ing['unit'], ing['category'])
+                )
+            return True
+        except sqlite3.OperationalError as e:
+            if "locked" in str(e) and attempt < 2:
+                time.sleep(2)
+                continue
+            print(f"  DB insert error: {e}", file=sys.stderr)
+            return False
+        except Exception as e:
+            print(f"  DB insert error: {e}", file=sys.stderr)
+            return False
+    return False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -466,7 +475,9 @@ def main():
     out = os.path.abspath(OUT_PATH)
     os.makedirs(os.path.dirname(out), exist_ok=True)
 
-    con = sqlite3.connect(out)
+    con = sqlite3.connect(out, timeout=30)
+    con.execute("PRAGMA journal_mode=WAL")   # 並行アクセス時の locked エラーを防ぐ
+    con.execute("PRAGMA synchronous=NORMAL") # WAL では NORMAL が安全かつ高速
     con.executescript(SCHEMA)
 
     # 既存URLをセットに読み込んでスキップ判定に使う
@@ -481,7 +492,7 @@ def main():
     sites = [
         ("白ごはん.com",         get_sirogohan_urls,    scrape_sirogohan,    None),
         ("みんなのきょうの料理",   get_kyounoryouri_urls, scrape_kyounoryouri, 1000),
-        ("レタスクラブ",           get_lettuceclub_urls,  scrape_lettuceclub,  None),
+        ("レタスクラブ",           get_lettuceclub_urls,  scrape_lettuceclub,  1200),
     ]
 
     total_success = total_skipped = total_already = 0
