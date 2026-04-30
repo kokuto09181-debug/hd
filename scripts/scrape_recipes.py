@@ -476,8 +476,8 @@ def main():
     session = requests.Session()
     session.headers['User-Agent'] = 'HealthDiaryApp-RecipeScraper/1.0 (personal use)'
 
-    # サイト定義: (表示名, URL取得関数, スクレイパー関数, 最大新規追加件数)
-    # None = 上限なし。大規模サイトは DB サイズ・処理時間を考慮して上限を設定。
+    # サイト定義: (表示名, URL取得関数, スクレイパー関数, DB上のサイト合計上限)
+    # max_total=None は上限なし。サイト合計上限に達したらそのサイトはスキップ。
     sites = [
         ("白ごはん.com",         get_sirogohan_urls,    scrape_sirogohan,    None),
         ("みんなのきょうの料理",   get_kyounoryouri_urls, scrape_kyounoryouri, 1000),
@@ -486,15 +486,25 @@ def main():
 
     total_success = total_skipped = total_already = 0
 
-    for site_name, get_urls, scrape, max_new in sites:
+    for site_name, get_urls, scrape, max_total in sites:
         print(f"\n{'='*55}", flush=True)
         print(f"[{site_name}]", flush=True)
         all_urls  = get_urls()
         new_urls  = [u for u in all_urls if u not in existing_urls]
-        if max_new is not None and len(new_urls) > max_new:
-            print(f"  ※ 上限 {max_new} 件に制限 (合計 {len(new_urls)} 件中)", flush=True)
-            new_urls = new_urls[:max_new]
-        already   = len(all_urls) - len(new_urls)
+
+        # サイト合計上限チェック: 既にDB内にある同サイト分を差し引いた残枠に制限
+        if max_total is not None and all_urls:
+            site_domain  = all_urls[0].split('/')[2]   # e.g. www.kyounoryouri.jp
+            site_current = sum(1 for u in existing_urls if site_domain in u)
+            remaining    = max(0, max_total - site_current)
+            print(f"  DB内 {site_current} 件 / 上限 {max_total} 件 / 追加可能 {remaining} 件",
+                  flush=True)
+            if remaining == 0:
+                print(f"  ※ 上限に達しているためスキップ", flush=True)
+                continue
+            new_urls = new_urls[:remaining]
+
+        already = len(all_urls) - len(new_urls)
         total_already += already
         print(f"  新規: {len(new_urls)} 件 / 既存スキップ: {already} 件", flush=True)
 
