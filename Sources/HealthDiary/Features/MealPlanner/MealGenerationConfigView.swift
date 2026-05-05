@@ -64,7 +64,7 @@ private struct OverallPresetRow: View {
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.accentColor)
+                        .foregroundStyle(.tint)
                 }
             }
         }
@@ -118,7 +118,7 @@ private struct SlotTemplateRow: View {
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.accentColor)
+                        .foregroundStyle(.tint)
                 }
             }
         }
