@@ -72,7 +72,9 @@ struct FoodLogView: View {
             .sheet(isPresented: $showingAdd) {
                 FoodLogAddView()
             }
-            .sheet(isPresented: $showingCamera) {
+            // fullScreenCover で提示しないと UIImagePickerController（カメラ）が
+            // 最上位のビューコントローラから提示できずシートの中で動作しない
+            .fullScreenCover(isPresented: $showingCamera) {
                 FoodPhotoCaptureView()
             }
         }

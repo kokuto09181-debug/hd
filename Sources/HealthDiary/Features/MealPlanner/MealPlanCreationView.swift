@@ -262,7 +262,7 @@ struct MealPlanCreationView: View {
     }
 
     private func generate() async {
-        guard overlapWarning == nil, !weekdaySlots.isEmpty else { return }
+        guard !weekdaySlots.isEmpty else { return }
         isGenerating = true
         generationError = nil
 
