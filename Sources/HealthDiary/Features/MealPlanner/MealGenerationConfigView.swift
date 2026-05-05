@@ -20,10 +20,14 @@ struct MealGenerationConfigView: View {
     }
 
     // MARK: - Overall Presets
+    // ForEach(Identifiable collection) が Xcode 26 で Binding オーバーロードを誤選択するため
+    // Range<Int> ベースの ForEach を使用して回避する
 
     private var overallPresetsSection: some View {
-        Section {
-            ForEach(MealGenerationConfig.overallPresets, id: \.id) { preset in
+        let presets = MealGenerationConfig.overallPresets
+        return Section {
+            ForEach(0..<presets.count, id: \.self) { index in
+                let preset = presets[index]
                 Button {
                     withAnimation { settings.apply(preset.config) }
                 } label: {
@@ -57,14 +61,15 @@ struct MealGenerationConfigView: View {
 
     // MARK: - Per-Slot Section
 
-    @ViewBuilder
     private func slotSection(
         title: String,
         binding: Binding<MealSlotTemplate>,
         mealType: MealType
     ) -> some View {
-        Section(title) {
-            ForEach(MealSlotTemplate.presets(for: mealType), id: \.name) { template in
+        let presets = MealSlotTemplate.presets(for: mealType)
+        return Section(title) {
+            ForEach(0..<presets.count, id: \.self) { index in
+                let template = presets[index]
                 Button {
                     withAnimation { binding.wrappedValue = template }
                 } label: {
@@ -106,10 +111,11 @@ struct MealStyleInlinePicker: View {
     @ObservedObject private var settings = MealGenerationSettings.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // 全体プリセットのクイック選択
+        let presets = MealGenerationConfig.overallPresets
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                ForEach(MealGenerationConfig.overallPresets, id: \.id) { preset in
+                ForEach(0..<presets.count, id: \.self) { index in
+                    let preset = presets[index]
                     Button {
                         withAnimation { settings.apply(preset.config) }
                     } label: {
