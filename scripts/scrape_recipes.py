@@ -467,6 +467,85 @@ def _parse_lettuceclub_ingredient(li):
             'category': classify_ing_category(name)}
 
 
+# ─── cookien.com ──────────────────────────────────────────────────────────────
+
+def get_cookien_urls() -> list:
+    print("cookien のサイトマップを取得中...", flush=True)
+    urls = []
+    for suffix in ['', '2']:
+        try:
+            r = requests.get(f"https://cookien.com/post-sitemap{suffix}.xml", timeout=30)
+            root = ET.fromstring(r.content)
+            ns = {'sm': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
+            for loc in root.findall('.//sm:loc', ns):
+                u = (loc.text or '').strip()
+                if re.match(r'https://cookien\.com/recipe/\d+/', u):
+                    urls.append(u)
+        except Exception as e:
+            print(f"  サイトマップ取得エラー: {e}", file=sys.stderr)
+    print(f"  {len(urls)} 件のレシピURLを発見", flush=True)
+    return urls
+
+
+def scrape_cookien(url: str, session) -> dict | None:
+    try:
+        resp = session.get(url, timeout=15)
+        if resp.status_code != 200: return None
+        resp.encoding = 'utf-8'
+        soup = BeautifulSoup(resp.text, 'lxml')
+    except Exception as e:
+        print(f"  fetch error: {e}", file=sys.stderr)
+        return None
+
+    h1 = soup.find('h1')
+    if not h1: return None
+    name = clean_title(h1.get_text(strip=True))
+    if not name: return None
+
+    # 新旧両フォーマット共通: <div id="r_contents"> を起点にする
+    # 旧: <p class="sozai|chomi">食材名<span>分量</span></p>
+    # 新: <p>食材名<span>分量</span></p>  ← plain p タグ
+    r_contents = soup.find('div', id='r_contents')
+    if not r_contents: return None
+
+    serving_size = 2
+    h2 = r_contents.find('h2')
+    if h2:
+        m = re.search(r'(\d+)\s*人分', h2.get_text())
+        if m: serving_size = int(m.group(1))
+
+    ingredients = []
+    for p in r_contents.find_all('p'):
+        span = p.find('span')
+        if not span: continue
+        amount_text = span.get_text(strip=True)
+        full_text   = p.get_text(strip=True)
+        span_text   = span.get_text(strip=True)
+        # 食材名 = p テキスト から末尾の span テキストを取り除いたもの
+        if full_text.endswith(span_text):
+            ing_name = full_text[:-len(span_text)].rstrip()
+        else:
+            ing_name = full_text.replace(span_text, '').strip()
+        ing_name = ing_name.lstrip('◎●※').strip()
+        if not ing_name or len(ing_name) > 30: continue
+        amount, unit = parse_amount(amount_text)
+        ingredients.append({'name': ing_name, 'amount': amount, 'unit': unit,
+                             'category': classify_ing_category(ing_name)})
+
+    if not ingredients: return None
+
+    ing_names = [i['name'] for i in ingredients]
+    cuisine  = classify_cuisine(name, ing_names, [])
+    main     = classify_main(ing_names)
+    method   = classify_method(name, [])
+    calories = estimate_calories(main, method)
+
+    return {'name': name, 'url': resp.url,
+            'cuisine_type': cuisine, 'main_ingredient': main,
+            'cooking_method': method, 'calories_per_serving': calories,
+            'serving_size': serving_size, 'ingredients': ingredients}
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # メイン
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -490,9 +569,10 @@ def main():
     # サイト定義: (表示名, URL取得関数, スクレイパー関数, DB上のサイト合計上限)
     # max_total=None は上限なし。サイト合計上限に達したらそのサイトはスキップ。
     sites = [
-        ("白ごはん.com",         get_sirogohan_urls,    scrape_sirogohan,    None),
-        ("みんなのきょうの料理",   get_kyounoryouri_urls, scrape_kyounoryouri, 1000),
-        ("レタスクラブ",           get_lettuceclub_urls,  scrape_lettuceclub,  1200),
+        ("白ごはん.com",         get_sirogohan_urls,    scrape_sirogohan,     None),
+        ("みんなのきょうの料理",   get_kyounoryouri_urls, scrape_kyounoryouri, 10000),
+        ("レタスクラブ",           get_lettuceclub_urls,  scrape_lettuceclub,  15000),
+        ("cookien",              get_cookien_urls,       scrape_cookien,        None),
     ]
 
     total_success = total_skipped = total_already = 0
