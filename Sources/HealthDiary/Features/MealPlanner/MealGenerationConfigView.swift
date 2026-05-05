@@ -23,7 +23,7 @@ struct MealGenerationConfigView: View {
 
     private var overallPresetsSection: some View {
         Section {
-            ForEach(MealGenerationConfig.overallPresets) { preset in
+            ForEach(MealGenerationConfig.overallPresets, id: \.id) { preset in
                 Button {
                     withAnimation { settings.apply(preset.config) }
                 } label: {
@@ -64,7 +64,7 @@ struct MealGenerationConfigView: View {
         mealType: MealType
     ) -> some View {
         Section(title) {
-            ForEach(MealSlotTemplate.presets(for: mealType)) { template in
+            ForEach(MealSlotTemplate.presets(for: mealType), id: \.name) { template in
                 Button {
                     withAnimation { binding.wrappedValue = template }
                 } label: {
@@ -109,7 +109,7 @@ struct MealStyleInlinePicker: View {
         VStack(alignment: .leading, spacing: 10) {
             // 全体プリセットのクイック選択
             HStack(spacing: 8) {
-                ForEach(MealGenerationConfig.overallPresets) { preset in
+                ForEach(MealGenerationConfig.overallPresets, id: \.id) { preset in
                     Button {
                         withAnimation { settings.apply(preset.config) }
                     } label: {
