@@ -2,9 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>com.apple.developer.healthkit</key>
-	<true/>
-	<key>com.apple.developer.healthkit.access</key>
-	<array/>
+	<!-- HealthKit は Apple Developer 有料アカウントが必要なため、
+	     AltStore（無料証明書）でサイドロードする場合は除外する。
+	     App Store 配信時にここを復活させる。 -->
 </dict>
 </plist>

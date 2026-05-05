@@ -17,6 +17,7 @@ targets:
         SWIFT_VERSION: 5.9
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_FILE: Sources/HealthDiary/Info.plist
+        INFOPLIST_OUTPUT_FORMAT: xml  # AltStore がバイナリ plist を読めない場合の対策
     entitlements:
       path: Sources/HealthDiary/HealthDiary.entitlements
     # 外部パッケージ不要 — FoundationModels はOS組み込み
