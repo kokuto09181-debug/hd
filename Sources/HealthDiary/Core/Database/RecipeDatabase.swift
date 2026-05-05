@@ -186,6 +186,73 @@ final class RecipeDatabase {
         return nil
     }
 
+    // MARK: - Config-driven Queries
+
+    /// 複数の料理系統 × 食材カテゴリでレシピをランダムに取得（MealSlotTemplate 用）
+    func fetchByCuisinesAndIngredients(
+        cuisines: [CuisineType],
+        ingredients: [MainIngredientCategory],
+        excludeIDs: [String] = [],
+        limit: Int = 20
+    ) -> [RecipeRecord] {
+        guard let db, !cuisines.isEmpty, !ingredients.isEmpty else { return [] }
+        let cusPlaceholders = cuisines.map { _ in "?" }.joined(separator: ",")
+        let ingPlaceholders = ingredients.map { _ in "?" }.joined(separator: ",")
+        let exclusionClause = excludeIDs.isEmpty ? ""
+            : " AND id NOT IN (\(excludeIDs.map { _ in "?" }.joined(separator: ",")))"
+        let sql = """
+            SELECT id, name, url, cuisine_type, main_ingredient, cooking_method,
+                   calories_per_serving, serving_size
+            FROM recipes
+            WHERE cuisine_type IN (\(cusPlaceholders))
+              AND main_ingredient IN (\(ingPlaceholders))
+            \(exclusionClause)
+            ORDER BY RANDOM() LIMIT ?
+        """
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return [] }
+        defer { sqlite3_finalize(statement) }
+        var idx: Int32 = 1
+        for c in cuisines    { sqlite3_bind_text(statement, idx, c.rawValue, -1, SQLITE_TRANSIENT); idx += 1 }
+        for i in ingredients { sqlite3_bind_text(statement, idx, i.rawValue, -1, SQLITE_TRANSIENT); idx += 1 }
+        for id in excludeIDs { sqlite3_bind_text(statement, idx, id,         -1, SQLITE_TRANSIENT); idx += 1 }
+        sqlite3_bind_int(statement, idx, Int32(limit))
+        var recipes: [RecipeRecord] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let r = parseRecipeRow(statement) { recipes.append(r) }
+        }
+        return recipes
+    }
+
+    /// 料理名キーワード（部分一致OR）でレシピをランダムに取得（パン朝食・麺丼など）
+    func fetchByKeywords(_ keywords: [String], excludeIDs: [String] = [], limit: Int = 20) -> [RecipeRecord] {
+        guard let db, !keywords.isEmpty else { return [] }
+        let kwClauses = keywords.map { _ in "name LIKE '%' || ? || '%'" }.joined(separator: " OR ")
+        let exclusionClause = excludeIDs.isEmpty ? ""
+            : " AND id NOT IN (\(excludeIDs.map { _ in "?" }.joined(separator: ",")))"
+        let sql = """
+            SELECT id, name, url, cuisine_type, main_ingredient, cooking_method,
+                   calories_per_serving, serving_size
+            FROM recipes
+            WHERE (\(kwClauses)) \(exclusionClause)
+            ORDER BY RANDOM() LIMIT ?
+        """
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return [] }
+        defer { sqlite3_finalize(statement) }
+        var idx: Int32 = 1
+        for kw in keywords   { sqlite3_bind_text(statement, idx, kw, -1, SQLITE_TRANSIENT); idx += 1 }
+        for id in excludeIDs { sqlite3_bind_text(statement, idx, id, -1, SQLITE_TRANSIENT); idx += 1 }
+        sqlite3_bind_int(statement, idx, Int32(limit))
+        var recipes: [RecipeRecord] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let r = parseRecipeRow(statement) { recipes.append(r) }
+        }
+        return recipes
+    }
+
+    // MARK: - Side Dish / Soup
+
     /// 副菜用: 野菜・豆腐・卵メインのレシピをランダムに1件取得
     func fetchSideDish(excludeIDs: [String] = []) -> RecipeRecord? {
         guard let db else { return nil }
@@ -209,18 +276,28 @@ final class RecipeDatabase {
         return nil
     }
 
-    /// 汁物用: 名前に「汁」「スープ」「ポタージュ」「みそ」を含むレシピをランダムに1件取得
-    func fetchSoup(excludeIDs: [String] = []) -> RecipeRecord? {
+    /// 汁物用: スタイルに応じてレシピをランダムに1件取得
+    /// - japanese: 汁・みそ系
+    /// - western:  スープ・ポタージュ系
+    /// - any:      両方
+    func fetchSoup(style: SoupStyle = .any, excludeIDs: [String] = []) -> RecipeRecord? {
         guard let db else { return nil }
         let exclusionClause = excludeIDs.isEmpty ? ""
             : " AND id NOT IN (\(excludeIDs.map { _ in "?" }.joined(separator: ",")))"
+        let styleClause: String
+        switch style {
+        case .japanese:
+            styleClause = "(name LIKE '%汁%' OR name LIKE '%みそ%' OR name LIKE '%味噌%')"
+        case .western:
+            styleClause = "(name LIKE '%スープ%' OR name LIKE '%ポタージュ%')"
+        case .any:
+            styleClause = "(name LIKE '%汁%' OR name LIKE '%スープ%' OR name LIKE '%ポタージュ%' OR name LIKE '%みそ%' OR name LIKE '%味噌%')"
+        }
         let sql = """
             SELECT id, name, url, cuisine_type, main_ingredient, cooking_method,
                    calories_per_serving, serving_size
             FROM recipes
-            WHERE (name LIKE '%汁%' OR name LIKE '%スープ%'
-                OR name LIKE '%ポタージュ%' OR name LIKE '%みそ%')
-            \(exclusionClause)
+            WHERE \(styleClause) \(exclusionClause)
             ORDER BY RANDOM() LIMIT 1
         """
         var statement: OpaquePointer?

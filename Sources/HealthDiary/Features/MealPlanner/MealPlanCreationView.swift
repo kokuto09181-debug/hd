@@ -7,6 +7,7 @@ struct MealPlanCreationView: View {
     @Query private var history: [MealHistoryEntry]
     @Query private var profiles: [FamilyProfile]
     @Query(sort: \MealPlan.endDate, order: .reverse) private var allPlans: [MealPlan]
+    @ObservedObject private var genSettings = MealGenerationSettings.shared
 
     @State private var startDate: Date
     @State private var numberOfDays = 4
@@ -41,6 +42,7 @@ struct MealPlanCreationView: View {
         Form {
             startDateSection
             periodSection
+            mealStyleSection
             weekdaySlotsSection
             weekendSlotsSection
             conditionsSection
@@ -77,6 +79,27 @@ struct MealPlanCreationView: View {
         .onAppear { adjustDefaultStartDate() }
         .onChange(of: startDate) { _, _ in checkOverlap() }
         .onChange(of: numberOfDays) { _, _ in checkOverlap() }
+    }
+
+    private var mealStyleSection: some View {
+        Section {
+            MealStyleInlinePicker()
+            NavigationLink {
+                MealGenerationConfigView()
+            } label: {
+                HStack {
+                    Text("詳細設定")
+                    Spacer()
+                    Text(genSettings.config.matchingPresetName ?? "カスタム")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text("献立スタイル")
+        } footer: {
+            Text("朝食・昼食・夕食ごとにメイン料理の系統や副菜・汁物の組み合わせを設定できます")
+        }
     }
 
     private var startDateSection: some View {
@@ -256,7 +279,8 @@ struct MealPlanCreationView: View {
             slotConfig: slotConfig,
             familyProfile: profiles.first,
             recentHistory: history,
-            conditions: allConditions
+            conditions: allConditions,
+            mealGenerationConfig: genSettings.config
         )
 
         do {

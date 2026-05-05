@@ -11,6 +11,7 @@ final class MealPlanEngine {
         slotConfig: SlotConfig,
         history: [MealHistoryEntry],
         profile: FamilyProfile?,
+        mealConfig: MealGenerationConfig = MealGenerationSettings.shared.config,
         context: ModelContext
     ) -> MealPlan {
         let endDate = Calendar.current.date(byAdding: .day, value: numberOfDays - 1, to: startDate)!
@@ -31,14 +32,14 @@ final class MealPlanEngine {
             let slots = isWeekend ? slotConfig.weekend : slotConfig.weekday
 
             for mealType in slots {
+                let template = mealConfig.template(for: mealType, isWeekend: isWeekend)
                 let meal = PlannedMeal(mealType: mealType)
 
-                if let recipe = pickRecipe(
-                    mealType: mealType,
+                if let recipe = pickMainDish(
+                    template: template,
                     cuisineRotation: &cuisineRotation,
                     methodRotation: &methodRotation,
-                    excludeIDs: Array(usedIDs),
-                    profile: profile
+                    excludeIDs: Array(usedIDs)
                 ) {
                     meal.recipeID = recipe.id
                     meal.recipeName = recipe.name
@@ -48,8 +49,8 @@ final class MealPlanEngine {
                     methodRotation.record(recipe.cookingMethod)
                 }
 
-                // 昼食・夕食は副菜を追加
-                if mealType == .lunch || mealType == .dinner {
+                // 副菜（テンプレートで有効な場合）
+                if template.sideDishEnabled {
                     if let side = RecipeDatabase.shared.fetchSideDish(excludeIDs: Array(usedIDs)) {
                         meal.sideDishID = side.id
                         meal.sideDishName = side.name
@@ -58,9 +59,12 @@ final class MealPlanEngine {
                     }
                 }
 
-                // 夕食は汁物も追加
-                if mealType == .dinner {
-                    if let soup = RecipeDatabase.shared.fetchSoup(excludeIDs: Array(usedIDs)) {
+                // 汁物（テンプレートで有効な場合、スタイルを反映）
+                if template.soupEnabled {
+                    if let soup = RecipeDatabase.shared.fetchSoup(
+                        style: template.soupStyle,
+                        excludeIDs: Array(usedIDs)
+                    ) {
                         meal.soupID = soup.id
                         meal.soupName = soup.name
                         meal.soupURL = soup.url
@@ -79,46 +83,72 @@ final class MealPlanEngine {
 
     // MARK: - Recipe Picking (Rule-based + DB)
 
-    private func pickRecipe(
-        mealType: MealType,
+    /// テンプレートに基づいてメイン料理を選択
+    private func pickMainDish(
+        template: MealSlotTemplate,
         cuisineRotation: inout CuisineRotation,
         methodRotation: inout CookingMethodRotation,
-        excludeIDs: [String],
-        profile: FamilyProfile?
+        excludeIDs: [String]
     ) -> RecipeRecord? {
         guard RecipeDatabase.shared.isAvailable else { return nil }
 
-        let targetCuisine = cuisineRotation.next()
-        // 昼食・夕食のメインは肉か魚を優先。朝食はすべてのカテゴリからランダム
-        let mainIngredientPool: [MainIngredientCategory] = (mealType == .lunch || mealType == .dinner)
-            ? [.meat, .fish]
-            : MainIngredientCategory.allCases.filter { $0 != .other }
-        let targetIngredient = mainIngredientPool.randomElement() ?? .other
+        let spec = template.mainDishSpec
         let targetMethod = methodRotation.next()
 
-        var candidates = RecipeDatabase.shared.fetchRecipes(
-            cuisineType: targetCuisine,
-            mainIngredient: targetIngredient,
-            cookingMethod: targetMethod,
-            excludeIDs: excludeIDs
-        )
+        switch spec.type {
 
-        // 条件を緩めて再検索
-        if candidates.isEmpty {
-            candidates = RecipeDatabase.shared.fetchRecipes(
+        // ── キーワード検索 ──────────────────────────────────────────────
+        case .byKeyword:
+            let candidates = RecipeDatabase.shared.fetchByKeywords(spec.keywords, excludeIDs: excludeIDs)
+            return candidates.first
+
+        // ── 食材 + 料理系統 ────────────────────────────────────────────
+        case .byIngredient:
+            let ingredients = spec.ingredients.isEmpty ? [MainIngredientCategory.other] : spec.ingredients
+            let targetIngredient = ingredients.randomElement()!
+
+            // テンプレートが特定の料理系統を指定している場合 → その中から選ぶ
+            if !spec.cuisines.isEmpty {
+                var candidates = RecipeDatabase.shared.fetchByCuisinesAndIngredients(
+                    cuisines: spec.cuisines,
+                    ingredients: ingredients,
+                    excludeIDs: excludeIDs
+                )
+                // 条件を緩和（調理法なし）→ excludeIDsなし の順でフォールバック
+                if candidates.isEmpty {
+                    candidates = RecipeDatabase.shared.fetchByCuisinesAndIngredients(
+                        cuisines: spec.cuisines,
+                        ingredients: ingredients
+                    )
+                }
+                if let picked = candidates.first {
+                    return picked
+                }
+            }
+
+            // テンプレートが料理系統を指定していない場合 → CuisineRotation を使う
+            let targetCuisine = cuisineRotation.next()
+            var candidates = RecipeDatabase.shared.fetchRecipes(
                 cuisineType: targetCuisine,
                 mainIngredient: targetIngredient,
+                cookingMethod: targetMethod,
                 excludeIDs: excludeIDs
             )
+            if candidates.isEmpty {
+                candidates = RecipeDatabase.shared.fetchRecipes(
+                    cuisineType: targetCuisine,
+                    mainIngredient: targetIngredient,
+                    excludeIDs: excludeIDs
+                )
+            }
+            if candidates.isEmpty {
+                candidates = RecipeDatabase.shared.fetchRecipes(
+                    cuisineType: targetCuisine,
+                    mainIngredient: targetIngredient
+                )
+            }
+            return candidates.first
         }
-        if candidates.isEmpty {
-            candidates = RecipeDatabase.shared.fetchRecipes(
-                cuisineType: targetCuisine,
-                mainIngredient: targetIngredient
-            )
-        }
-
-        return candidates.first
     }
 
     // MARK: - Shopping List Generation

@@ -8,6 +8,7 @@ struct SettingsView: View {
     var body: some View {
         List {
             familySection
+            mealStyleSection
             subscriptionSection
             aiModelSection
             appInfoSection
@@ -20,6 +21,22 @@ struct SettingsView: View {
     }
 
     // MARK: - Sections
+
+    private var mealStyleSection: some View {
+        Section("献立") {
+            NavigationLink {
+                MealGenerationConfigView()
+            } label: {
+                HStack {
+                    Label("献立スタイル設定", systemImage: "fork.knife")
+                    Spacer()
+                    Text(MealGenerationSettings.shared.config.matchingPresetName ?? "カスタム")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
 
     private var familySection: some View {
         Section("家族") {

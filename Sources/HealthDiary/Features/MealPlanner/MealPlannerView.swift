@@ -164,6 +164,7 @@ struct MealPlanDetailView: View {
     @Environment(\.modelContext) private var context
     @Query private var profiles: [FamilyProfile]
     @Query private var history: [MealHistoryEntry]
+    @ObservedObject private var genSettings = MealGenerationSettings.shared
     @State private var selectedDayIndex = 0
     @State private var isRegenerating = false
     @State private var regenerationError: String? = nil
@@ -306,7 +307,8 @@ struct MealPlanDetailView: View {
             ),
             familyProfile: profiles.first,
             recentHistory: history,
-            conditions: plan.generationConditions
+            conditions: plan.generationConditions,
+            mealGenerationConfig: genSettings.config
         )
     }
 

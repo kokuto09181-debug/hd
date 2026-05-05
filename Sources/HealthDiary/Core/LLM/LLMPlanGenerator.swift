@@ -51,6 +51,7 @@ final class LLMPlanGenerator {
         let familyProfile: FamilyProfile?
         let recentHistory: [MealHistoryEntry]
         let conditions: [String]
+        var mealGenerationConfig: MealGenerationConfig = MealGenerationSettings.shared.config
     }
 
     enum GenerationError: LocalizedError {
@@ -82,7 +83,7 @@ final class LLMPlanGenerator {
             let date = parseDate(dayOutput.date) ?? request.startDate
             let dayPlan = DayPlan(date: date)
             context.insert(dayPlan)
-            appendMeals(from: dayOutput, to: dayPlan, context: context)
+            appendMeals(from: dayOutput, to: dayPlan, config: request.mealGenerationConfig, context: context)
             plan.days.append(dayPlan)
         }
     }
@@ -98,7 +99,7 @@ final class LLMPlanGenerator {
         let output = try await fetchDayOutput(for: dayPlan, plan: plan, request: request)
         dayPlan.meals.forEach { context.delete($0) }
         dayPlan.meals.removeAll()
-        appendMeals(from: output, to: dayPlan, context: context)
+        appendMeals(from: output, to: dayPlan, config: request.mealGenerationConfig, context: context)
     }
 
     // MARK: - Private: LLM / Simulator 分岐
@@ -158,7 +159,7 @@ final class LLMPlanGenerator {
             let date = parseDate(dayOutput.date) ?? request.startDate
             let dayPlan = DayPlan(date: date)
             context.insert(dayPlan)
-            appendMeals(from: dayOutput, to: dayPlan, context: context)
+            appendMeals(from: dayOutput, to: dayPlan, config: request.mealGenerationConfig, context: context)
             plan.days.append(dayPlan)
         }
         return plan
@@ -168,10 +169,12 @@ final class LLMPlanGenerator {
     // LLMが返した料理名を PlannedMeal に変換。
     // 完全一致 → 部分一致 → DB内ランダムの順で必ずDBレシピを紐付ける。
     // DBにない料理名はアプリ内で扱えないため、フォールバックで必ず解決する。
+    // 副菜・汁物は MealGenerationConfig のテンプレートに従って Swift 側で追加する。
 
     private func appendMeals(
         from output: DayMealOutput,
         to dayPlan: DayPlan,
+        config: MealGenerationConfig,
         context: ModelContext
     ) {
         let slots: [(MealType, String?)] = [
@@ -180,6 +183,7 @@ final class LLMPlanGenerator {
             (.dinner,    output.dinner),
             (.snack,     output.snack)
         ]
+        let isWeekend = Calendar.current.isDateInWeekend(dayPlan.date)
         // 既にこの日に使ったレシピIDを除外リストに
         var usedIDs = dayPlan.meals.compactMap { $0.recipeID }
 
@@ -207,6 +211,26 @@ final class LLMPlanGenerator {
             meal.recipeName = recipe.name
             meal.recipeURL  = recipe.url.isEmpty ? nil : recipe.url
             meal.notes      = ""
+
+            // 副菜・汁物をテンプレートに従って追加
+            let template = config.template(for: mealType, isWeekend: isWeekend)
+            if template.sideDishEnabled {
+                if let side = RecipeDatabase.shared.fetchSideDish(excludeIDs: usedIDs) {
+                    meal.sideDishID   = side.id
+                    meal.sideDishName = side.name
+                    meal.sideDishURL  = side.url.isEmpty ? nil : side.url
+                    usedIDs.append(side.id)
+                }
+            }
+            if template.soupEnabled {
+                if let soup = RecipeDatabase.shared.fetchSoup(style: template.soupStyle, excludeIDs: usedIDs) {
+                    meal.soupID   = soup.id
+                    meal.soupName = soup.name
+                    meal.soupURL  = soup.url.isEmpty ? nil : soup.url
+                    usedIDs.append(soup.id)
+                }
+            }
+
             context.insert(meal)
             dayPlan.meals.append(meal)
         }
@@ -233,12 +257,16 @@ final class LLMPlanGenerator {
         let recentNames = request.recentHistory.prefix(15).compactMap { $0.recipeName }
         let recentText = recentNames.isEmpty ? "なし" : recentNames.joined(separator: "、")
         let slotsText = buildSlotsText(request: request)
-        let recipeList = buildDBRecipeList(conditions: request.conditions)
+        let recipeList = buildDBRecipeList(conditions: request.conditions, config: request.mealGenerationConfig)
 
+        let styleText = buildStyleHintText(config: request.mealGenerationConfig, slotConfig: request.slotConfig)
         return """
         \(familyText)
         希望条件: \(conditionsText)
         最近食べた料理（重複を避けること）: \(recentText)
+
+        食事スタイル（メイン料理の選択時に反映してください）:
+        \(styleText)
 
         食事スロット:
         \(slotsText)
@@ -270,11 +298,13 @@ final class LLMPlanGenerator {
             .compactMap { $0.recipeName }
             .joined(separator: "、")
         let familyText = buildFamilyText(request.familyProfile)
-        let recipeList = buildDBRecipeList(conditions: request.conditions)
+        let recipeList = buildDBRecipeList(conditions: request.conditions, config: request.mealGenerationConfig)
+        let styleText  = buildStyleHintText(config: request.mealGenerationConfig, slotConfig: request.slotConfig)
 
         return """
         \(familyText)
         \(dateStr)（スロット: \(slotStr)）の1日分の献立を提案してください。
+        食事スタイル: \(styleText)
         他の日で使った料理（重複不可）: \(usedNames.isEmpty ? "なし" : usedNames)
 
         ── 選択可能なレシピ一覧（この中から名前を完全一致で選んでください）──
@@ -286,8 +316,8 @@ final class LLMPlanGenerator {
     }
 
     /// DB内から最大120件をランダムサンプリングしてプロンプト用リストを生成。
-    /// 「魚多め」「肉多め」などの条件があれば対応カテゴリを多く含める。
-    private func buildDBRecipeList(conditions: [String]) -> String {
+    /// MealGenerationConfig で指定された料理系統・条件を優先的にサンプリング。
+    private func buildDBRecipeList(conditions: [String], config: MealGenerationConfig? = nil) -> String {
         let wantFish = conditions.contains { $0.contains("魚") }
         let wantMeat = conditions.contains { $0.contains("肉") }
 
@@ -301,25 +331,50 @@ final class LLMPlanGenerator {
             }
         }
 
-        // 条件に応じてカテゴリの配分を変える
+        // configから優先する料理系統を抽出
+        let configCuisines: Set<CuisineType> = config.map { cfg in
+            Set([cfg.breakfastWeekday, cfg.lunchWeekday, cfg.dinnerWeekday,
+                 cfg.breakfastWeekend, cfg.lunchWeekend, cfg.dinnerWeekend]
+                .flatMap { $0.mainDishSpec.cuisines })
+        } ?? []
+
+        let boostWestern = configCuisines.contains(.western)
+        let boostChinese = configCuisines.contains(.chinese)
+
         let fishLimit  = wantFish ? 30 : 18
         let meatLimit  = wantMeat ? 30 : 20
-        let veggLimit  = 18
-        let otherLimit = 15
+        let westernLim = boostWestern ? 20 : 10
+        let chineseLim = boostChinese ? 16 : 8
 
+        // 和食（ベース）
         add(RecipeDatabase.shared.fetchRecipes(cuisineType: .japanese, mainIngredient: .fish,      excludeIDs: [], limit: fishLimit), max: fishLimit)
         add(RecipeDatabase.shared.fetchRecipes(cuisineType: .japanese, mainIngredient: .meat,      excludeIDs: [], limit: meatLimit), max: meatLimit)
-        add(RecipeDatabase.shared.fetchRecipes(cuisineType: .japanese, mainIngredient: .vegetable, excludeIDs: [], limit: veggLimit), max: veggLimit)
-        add(RecipeDatabase.shared.fetchRecipes(cuisineType: .japanese, mainIngredient: .egg,       excludeIDs: [], limit: 10), max: 10)
-        add(RecipeDatabase.shared.fetchRecipes(cuisineType: .japanese, mainIngredient: .tofu,      excludeIDs: [], limit: 8),  max: 8)
-        add(RecipeDatabase.shared.fetchRecipes(cuisineType: .japanese, mainIngredient: .other,     excludeIDs: [], limit: otherLimit), max: otherLimit)
+        add(RecipeDatabase.shared.fetchRecipes(cuisineType: .japanese, mainIngredient: .vegetable, excludeIDs: [], limit: 12), max: 12)
+        add(RecipeDatabase.shared.fetchRecipes(cuisineType: .japanese, mainIngredient: .egg,       excludeIDs: [], limit: 8),  max: 8)
+        add(RecipeDatabase.shared.fetchRecipes(cuisineType: .japanese, mainIngredient: .tofu,      excludeIDs: [], limit: 6),  max: 6)
+        // 洋食
+        add(RecipeDatabase.shared.fetchByCuisinesAndIngredients(cuisines: [.western], ingredients: [.meat, .fish], excludeIDs: [], limit: westernLim), max: westernLim)
+        // 中華
+        add(RecipeDatabase.shared.fetchByCuisinesAndIngredients(cuisines: [.chinese], ingredients: [.meat, .fish], excludeIDs: [], limit: chineseLim), max: chineseLim)
 
-        // 120件未満なら補充
+        // 不足分を補充
         if collected.count < 80 {
             add(RecipeDatabase.shared.fetchAll(limit: 100), max: 100 - collected.count)
         }
 
         return collected.map { $0.name }.joined(separator: "・")
+    }
+
+    /// 献立スタイル設定をプロンプト用の説明文に変換
+    private func buildStyleHintText(config: MealGenerationConfig, slotConfig: SlotConfig) -> String {
+        let hasLunch = slotConfig.weekday.contains(.lunch) || slotConfig.weekend.contains(.lunch)
+        var lines: [String] = []
+        lines.append("朝食: \(config.breakfastWeekday.name)（\(config.breakfastWeekday.mainDishSpec.displayDescription)メインが好ましい）")
+        if hasLunch {
+            lines.append("昼食: \(config.lunchWeekday.name)（\(config.lunchWeekday.mainDishSpec.displayDescription)メインが好ましい）")
+        }
+        lines.append("夕食: \(config.dinnerWeekday.name)（\(config.dinnerWeekday.mainDishSpec.displayDescription)メインが好ましい）")
+        return lines.joined(separator: "\n")
     }
 
     private func buildFamilyText(_ profile: FamilyProfile?) -> String {
