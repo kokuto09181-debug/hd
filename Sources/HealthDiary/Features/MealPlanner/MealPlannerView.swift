@@ -554,7 +554,7 @@ private struct MealDishRow: View {
                 .font(.title3)
                 .frame(width: 30)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 switch meal.mealOption {
                 case .homeCooked:
                     if let name = meal.recipeName {
@@ -569,6 +569,36 @@ private struct MealDishRow: View {
                         Text("未設定")
                             .font(.body)
                             .foregroundStyle(.secondary)
+                    }
+                    // 副菜
+                    if let side = meal.sideDishName {
+                        HStack(spacing: 4) {
+                            Text("副菜")
+                                .font(.caption2)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Color.green.opacity(0.15))
+                                .foregroundStyle(.green)
+                                .clipShape(Capsule())
+                            Text(side)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    // 汁物
+                    if let soup = meal.soupName {
+                        HStack(spacing: 4) {
+                            Text("汁物")
+                                .font(.caption2)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Color.blue.opacity(0.12))
+                                .foregroundStyle(.blue)
+                                .clipShape(Capsule())
+                            Text(soup)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 case .diningOut:
                     Text("外食")

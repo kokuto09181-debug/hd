@@ -3,7 +3,17 @@ import SwiftUI
 struct MealSlotEditView: View {
     @Bindable var meal: PlannedMeal
     @Environment(\.dismiss) private var dismiss
-    @State private var showingRecipeSearch = false
+
+    // どのレシピ検索を開いているか: "main" / "side" / "soup"
+    @State private var searchTarget: SearchTarget? = nil
+
+    enum SearchTarget: String, Identifiable {
+        case main, side, soup
+        var id: String { rawValue }
+    }
+
+    private var showSideDish: Bool { meal.mealType == .lunch || meal.mealType == .dinner }
+    private var showSoup:     Bool { meal.mealType == .dinner }
 
     var body: some View {
         NavigationStack {
@@ -31,43 +41,61 @@ struct MealSlotEditView: View {
                 }
 
                 if meal.mealOption == .homeCooked {
-                    Section("レシピ") {
-                        if let name = meal.recipeName {
-                            HStack(spacing: 12) {
-                                Text(recipeEmoji(for: name))
-                                    .font(.title2)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(name)
-                                        .font(.headline)
-                                    if let urlString = meal.recipeURL, let url = URL(string: urlString) {
-                                        Link("レシピを見る ↗", destination: url)
-                                            .font(.caption)
-                                    }
-                                }
-                                Spacer()
-                            }
-                            .padding(.vertical, 4)
-
-                            Button {
-                                showingRecipeSearch = true
-                            } label: {
-                                Label("レシピを変更", systemImage: "arrow.triangle.2.circlepath")
-                                    .font(.subheadline)
-                            }
-                        } else {
-                            Button {
-                                showingRecipeSearch = true
-                            } label: {
-                                Label("DBからレシピを選ぶ", systemImage: "magnifyingglass")
-                                    .font(.subheadline)
-                            }
-
-                            // DBにないレシピは名前を直接入力
-                            TextField("または料理名を入力", text: Binding(
+                    // ---- メイン料理 ----
+                    Section("メイン料理") {
+                        recipeRow(
+                            name: meal.recipeName,
+                            url: meal.recipeURL,
+                            onSearch: { searchTarget = .main },
+                            onClear: {
+                                meal.recipeID = nil
+                                meal.recipeName = nil
+                                meal.recipeURL = nil
+                            },
+                            nameFallback: Binding(
                                 get: { meal.recipeName ?? "" },
                                 set: { meal.recipeName = $0.isEmpty ? nil : $0 }
-                            ))
-                            .foregroundStyle(.primary)
+                            )
+                        )
+                    }
+
+                    // ---- 副菜（昼食・夕食） ----
+                    if showSideDish {
+                        Section("副菜") {
+                            recipeRow(
+                                name: meal.sideDishName,
+                                url: meal.sideDishURL,
+                                onSearch: { searchTarget = .side },
+                                onClear: {
+                                    meal.sideDishID = nil
+                                    meal.sideDishName = nil
+                                    meal.sideDishURL = nil
+                                },
+                                nameFallback: Binding(
+                                    get: { meal.sideDishName ?? "" },
+                                    set: { meal.sideDishName = $0.isEmpty ? nil : $0 }
+                                )
+                            )
+                        }
+                    }
+
+                    // ---- 汁物（夕食） ----
+                    if showSoup {
+                        Section("汁物") {
+                            recipeRow(
+                                name: meal.soupName,
+                                url: meal.soupURL,
+                                onSearch: { searchTarget = .soup },
+                                onClear: {
+                                    meal.soupID = nil
+                                    meal.soupName = nil
+                                    meal.soupURL = nil
+                                },
+                                nameFallback: Binding(
+                                    get: { meal.soupName ?? "" },
+                                    set: { meal.soupName = $0.isEmpty ? nil : $0 }
+                                )
+                            )
                         }
                     }
                 }
@@ -84,13 +112,70 @@ struct MealSlotEditView: View {
                     Button("完了") { dismiss() }
                 }
             }
-            .sheet(isPresented: $showingRecipeSearch) {
+            .sheet(item: $searchTarget) { target in
                 RecipeSearchView { recipe in
-                    meal.recipeID   = recipe.id
-                    meal.recipeName = recipe.name
-                    meal.recipeURL  = recipe.url.isEmpty ? nil : recipe.url
+                    switch target {
+                    case .main:
+                        meal.recipeID   = recipe.id
+                        meal.recipeName = recipe.name
+                        meal.recipeURL  = recipe.url.isEmpty ? nil : recipe.url
+                    case .side:
+                        meal.sideDishID   = recipe.id
+                        meal.sideDishName = recipe.name
+                        meal.sideDishURL  = recipe.url.isEmpty ? nil : recipe.url
+                    case .soup:
+                        meal.soupID   = recipe.id
+                        meal.soupName = recipe.name
+                        meal.soupURL  = recipe.url.isEmpty ? nil : recipe.url
+                    }
                 }
             }
+        }
+    }
+
+    // MARK: - 共通レシピ行
+
+    @ViewBuilder
+    private func recipeRow(
+        name: String?,
+        url: String?,
+        onSearch: @escaping () -> Void,
+        onClear: @escaping () -> Void,
+        nameFallback: Binding<String>
+    ) -> some View {
+        if let name {
+            HStack(spacing: 12) {
+                Text(recipeEmoji(for: name))
+                    .font(.title2)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(name)
+                        .font(.headline)
+                    if let urlString = url, let recipeURL = URL(string: urlString) {
+                        Link("レシピを見る ↗", destination: recipeURL)
+                            .font(.caption)
+                    }
+                }
+                Spacer()
+                Button(action: onClear) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.vertical, 4)
+
+            Button(action: onSearch) {
+                Label("レシピを変更", systemImage: "arrow.triangle.2.circlepath")
+                    .font(.subheadline)
+            }
+        } else {
+            Button(action: onSearch) {
+                Label("DBからレシピを選ぶ", systemImage: "magnifyingglass")
+                    .font(.subheadline)
+            }
+
+            TextField("または料理名を入力", text: nameFallback)
+                .foregroundStyle(.primary)
         }
     }
 

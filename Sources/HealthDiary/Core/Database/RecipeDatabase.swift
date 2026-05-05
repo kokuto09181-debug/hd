@@ -186,6 +186,53 @@ final class RecipeDatabase {
         return nil
     }
 
+    /// 副菜用: 野菜・豆腐・卵メインのレシピをランダムに1件取得
+    func fetchSideDish(excludeIDs: [String] = []) -> RecipeRecord? {
+        guard let db else { return nil }
+        let exclusionClause = excludeIDs.isEmpty ? ""
+            : " AND id NOT IN (\(excludeIDs.map { _ in "?" }.joined(separator: ",")))"
+        let sql = """
+            SELECT id, name, url, cuisine_type, main_ingredient, cooking_method,
+                   calories_per_serving, serving_size
+            FROM recipes
+            WHERE main_ingredient IN ('野菜', '豆腐', '卵')
+            \(exclusionClause)
+            ORDER BY RANDOM() LIMIT 1
+        """
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_finalize(statement) }
+        for (i, id) in excludeIDs.enumerated() {
+            sqlite3_bind_text(statement, Int32(i + 1), id, -1, SQLITE_TRANSIENT)
+        }
+        if sqlite3_step(statement) == SQLITE_ROW { return parseRecipeRow(statement) }
+        return nil
+    }
+
+    /// 汁物用: 名前に「汁」「スープ」「ポタージュ」「みそ」を含むレシピをランダムに1件取得
+    func fetchSoup(excludeIDs: [String] = []) -> RecipeRecord? {
+        guard let db else { return nil }
+        let exclusionClause = excludeIDs.isEmpty ? ""
+            : " AND id NOT IN (\(excludeIDs.map { _ in "?" }.joined(separator: ",")))"
+        let sql = """
+            SELECT id, name, url, cuisine_type, main_ingredient, cooking_method,
+                   calories_per_serving, serving_size
+            FROM recipes
+            WHERE (name LIKE '%汁%' OR name LIKE '%スープ%'
+                OR name LIKE '%ポタージュ%' OR name LIKE '%みそ%')
+            \(exclusionClause)
+            ORDER BY RANDOM() LIMIT 1
+        """
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_finalize(statement) }
+        for (i, id) in excludeIDs.enumerated() {
+            sqlite3_bind_text(statement, Int32(i + 1), id, -1, SQLITE_TRANSIENT)
+        }
+        if sqlite3_step(statement) == SQLITE_ROW { return parseRecipeRow(statement) }
+        return nil
+    }
+
     func fetchIngredients(for recipeID: String) -> [IngredientRecord] {
         guard let db else { return [] }
 

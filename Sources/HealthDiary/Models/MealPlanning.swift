@@ -47,11 +47,26 @@ final class DayPlan {
 final class PlannedMeal {
     var mealType: MealType
     var mealOption: MealOption
+    // メイン料理
     var recipeID: String?
     var recipeName: String?
     var recipeURL: String?
+    // 副菜（昼食・夕食）
+    var sideDishID: String?
+    var sideDishName: String?
+    var sideDishURL: String?
+    // 汁物（夕食）
+    var soupID: String?
+    var soupName: String?
+    var soupURL: String?
+
     var leftoverSourceMealID: UUID?
     var notes: String
+
+    /// 全品名（メイン + 副菜 + 汁物）
+    var allDishNames: [String] {
+        [recipeName, sideDishName, soupName].compactMap { $0 }
+    }
 
     init(mealType: MealType, mealOption: MealOption = .homeCooked) {
         self.mealType = mealType

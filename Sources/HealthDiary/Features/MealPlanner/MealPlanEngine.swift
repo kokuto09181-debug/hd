@@ -48,6 +48,26 @@ final class MealPlanEngine {
                     methodRotation.record(recipe.cookingMethod)
                 }
 
+                // 昼食・夕食は副菜を追加
+                if mealType == .lunch || mealType == .dinner {
+                    if let side = RecipeDatabase.shared.fetchSideDish(excludeIDs: Array(usedIDs)) {
+                        meal.sideDishID = side.id
+                        meal.sideDishName = side.name
+                        meal.sideDishURL = side.url
+                        usedIDs.insert(side.id)
+                    }
+                }
+
+                // 夕食は汁物も追加
+                if mealType == .dinner {
+                    if let soup = RecipeDatabase.shared.fetchSoup(excludeIDs: Array(usedIDs)) {
+                        meal.soupID = soup.id
+                        meal.soupName = soup.name
+                        meal.soupURL = soup.url
+                        usedIDs.insert(soup.id)
+                    }
+                }
+
                 dayPlan.meals.append(meal)
             }
 
@@ -69,7 +89,11 @@ final class MealPlanEngine {
         guard RecipeDatabase.shared.isAvailable else { return nil }
 
         let targetCuisine = cuisineRotation.next()
-        let targetIngredient = MainIngredientCategory.allCases.randomElement() ?? .other
+        // 昼食・夕食のメインは肉か魚を優先。朝食はすべてのカテゴリからランダム
+        let mainIngredientPool: [MainIngredientCategory] = (mealType == .lunch || mealType == .dinner)
+            ? [.meat, .fish]
+            : MainIngredientCategory.allCases.filter { $0 != .other }
+        let targetIngredient = mainIngredientPool.randomElement() ?? .other
         let targetMethod = methodRotation.next()
 
         var candidates = RecipeDatabase.shared.fetchRecipes(
@@ -113,44 +137,50 @@ final class MealPlanEngine {
 
         for day in plan.days {
             for meal in day.meals {
-                // スキップ・外食は買い出し不要
-                guard meal.mealOption == .homeCooked,
-                      let recipeName = meal.recipeName else { continue }
+                guard meal.mealOption == .homeCooked else { continue }
 
-                // recipeID が設定されていれば優先、なければ名前でDB検索してフォールバック
-                let resolvedID = meal.recipeID
-                    ?? RecipeDatabase.shared.searchByName(recipeName)?.id
+                // 集計対象ディッシュ: (recipeID, recipeName) のペアを列挙
+                let dishes: [(id: String?, name: String?)] = [
+                    (meal.recipeID, meal.recipeName),
+                    (meal.sideDishID, meal.sideDishName),
+                    (meal.soupID, meal.soupName)
+                ]
 
-                if let recipeID = resolvedID {
-                    // DBレシピの食材を集計
-                    let ingredients = RecipeDatabase.shared.fetchIngredients(for: recipeID)
-                    for ing in ingredients {
-                        let canonical = normService.normalize(ing.name, aliases: aliases)
-                        let key = "\(canonical)_\(ing.unit)"
-                        if aggregated[key] != nil {
-                            aggregated[key]!.totalAmount += ing.amount
-                            aggregated[key]!.usedInRecipes.insert(recipeName)
-                        } else {
+                for dish in dishes {
+                    guard let dishName = dish.name else { continue }
+
+                    let resolvedID = dish.id
+                        ?? RecipeDatabase.shared.searchByName(dishName)?.id
+
+                    if let recipeID = resolvedID {
+                        let ingredients = RecipeDatabase.shared.fetchIngredients(for: recipeID)
+                        for ing in ingredients {
+                            let canonical = normService.normalize(ing.name, aliases: aliases)
+                            let key = "\(canonical)_\(ing.unit)"
+                            if aggregated[key] != nil {
+                                aggregated[key]!.totalAmount += ing.amount
+                                aggregated[key]!.usedInRecipes.insert(dishName)
+                            } else {
+                                aggregated[key] = AggregatedIngredient(
+                                    name: canonical,
+                                    totalAmount: ing.amount,
+                                    unit: ing.unit,
+                                    category: ing.category,
+                                    usedInRecipes: [dishName]
+                                )
+                            }
+                        }
+                    } else {
+                        let key = "UNLINKED_\(dishName)"
+                        if aggregated[key] == nil {
                             aggregated[key] = AggregatedIngredient(
-                                name: canonical,
-                                totalAmount: ing.amount,
-                                unit: ing.unit,
-                                category: ing.category,
-                                usedInRecipes: [recipeName]
+                                name: dishName,
+                                totalAmount: 0,
+                                unit: "※食材要確認",
+                                category: .other,
+                                usedInRecipes: [dishName]
                             )
                         }
-                    }
-                } else {
-                    // DB未登録: 料理名を「食材要確認」アイテムとして追加
-                    let key = "UNLINKED_\(recipeName)"
-                    if aggregated[key] == nil {
-                        aggregated[key] = AggregatedIngredient(
-                            name: recipeName,
-                            totalAmount: 0,
-                            unit: "※食材要確認",
-                            category: .other,
-                            usedInRecipes: [recipeName]
-                        )
                     }
                 }
             }
@@ -191,10 +221,11 @@ private struct CuisineRotation {
 
     init(history: [MealHistoryEntry]) {
         let recent = history.suffix(14).map { $0.cuisineType }
-        // 直近で少ない系統を優先
+        // 直近で少ない系統を優先。履歴が少ない場合はシャッフルで初期多様性を確保
         queue = CuisineType.allCases.sorted { a, b in
             recent.filter { $0 == a }.count < recent.filter { $0 == b }.count
         }
+        if history.count < 7 { queue.shuffle() }
     }
 
     mutating func next() -> CuisineType {
