@@ -624,6 +624,10 @@ def main():
         print(f"  [{site_name}] 完了: {site_success} 件保存, {site_skipped} 件スキップ",
               flush=True)
 
+    # iOS バンドル（読み取り専用）で WAL モードが使えないため DELETE に戻す
+    con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    con.execute("PRAGMA journal_mode=DELETE")
+    con.commit()
     con.close()
     total_in_db = len(existing_urls)
     print(f"\n{'='*55}")
