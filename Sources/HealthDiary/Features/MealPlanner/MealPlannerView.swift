@@ -47,8 +47,52 @@ struct MealPlannerView: View {
         }
     }
 
+    // 最新プランの翌日からの提案テキスト
+    private var nextPlanSuggestion: String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "M/d(E)"
+        fmt.locale = Locale(identifier: "ja_JP")
+        if let latest = allPlans.max(by: { $0.endDate < $1.endDate }) {
+            let next = Calendar.current.date(byAdding: .day, value: 1, to: latest.endDate) ?? Date()
+            return "\(fmt.string(from: next))〜 の献立を作成"
+        }
+        return "AIが献立を提案します"
+    }
+
     private var planList: some View {
         List {
+            // ── 新規作成カード（常に最上部）──────────────────────
+            Section {
+                Button {
+                    showingCreation = true
+                } label: {
+                    HStack(spacing: 14) {
+                        ZStack {
+                            Circle()
+                                .fill(Color(.systemGray5))
+                                .frame(width: 42, height: 42)
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundStyle(.tint)
+                        }
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("新しい献立を作る")
+                                .font(.body.bold())
+                                .foregroundStyle(.primary)
+                            Text(nextPlanSuggestion)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+            }
+
             // 確定済み: 日程を問わず全件表示
             if !confirmedPlans.isEmpty {
                 Section("確定済み") {

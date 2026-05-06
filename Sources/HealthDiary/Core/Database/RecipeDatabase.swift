@@ -334,6 +334,21 @@ final class RecipeDatabase {
         return ingredients
     }
 
+    // MARK: - Serving Size
+
+    /// レシピの基準人数を返す（データなし・0 の場合は 2 を返す）
+    func fetchServingSize(for recipeID: String) -> Int {
+        guard let db else { return 2 }
+        let query = "SELECT serving_size FROM recipes WHERE id = ? LIMIT 1"
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK else { return 2 }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, recipeID, -1, SQLITE_TRANSIENT)
+        guard sqlite3_step(statement) == SQLITE_ROW else { return 2 }
+        let size = Int(sqlite3_column_int(statement, 0))
+        return size > 0 ? size : 2
+    }
+
     // MARK: - Helpers
 
     private func parseRecipeRow(_ statement: OpaquePointer?) -> RecipeRecord? {

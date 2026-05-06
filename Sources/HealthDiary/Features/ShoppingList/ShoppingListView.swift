@@ -8,14 +8,18 @@ struct ShoppingListView: View {
     @Query(sort: \MealPlan.startDate, order: .reverse) private var allPlans: [MealPlan]
     @Query(sort: \PantryItem.addedAt, order: .reverse) private var pantryItems: [PantryItem]
     @Query private var aliases: [IngredientAlias]
+    @Query private var profiles: [FamilyProfile]
     @Environment(\.modelContext) private var context
 
     @State private var selectedTab: ShoppingTab = .shopping
     @State private var showingGenerateConfirm = false
     @State private var showingAddPantry = false
+    @State private var isConsolidating = false
+    @State private var consolidationError: String? = nil
 
     private var confirmedPlans: [MealPlan] { allPlans.filter { $0.status == .shopping } }
     private var activeList: ShoppingList? { lists.first }
+    private var familySize: Int { max(1, profiles.first?.members.count ?? 2) }
 
     var body: some View {
         NavigationStack {
@@ -65,17 +69,33 @@ struct ShoppingListView: View {
 
     @ViewBuilder
     private var shoppingContent: some View {
-        if let list = activeList, !list.items.isEmpty {
-            ShoppingItemsView(
-                list: list,
-                pantryItems: pantryItems,
-                aliases: aliases
-            )
-        } else {
-            EmptyShoppingListView(
-                hasPlan: !confirmedPlans.isEmpty,
-                onGenerate: { showingGenerateConfirm = true }
-            )
+        VStack(spacing: 0) {
+            if let errMsg = consolidationError {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text(errMsg)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.systemGray6))
+            }
+
+            if let list = activeList, !list.items.isEmpty {
+                ShoppingItemsView(
+                    list: list,
+                    pantryItems: pantryItems,
+                    aliases: aliases
+                )
+            } else {
+                EmptyShoppingListView(
+                    hasPlan: !confirmedPlans.isEmpty,
+                    onGenerate: { showingGenerateConfirm = true }
+                )
+            }
         }
     }
 
@@ -86,19 +106,29 @@ struct ShoppingListView: View {
         if selectedTab == .shopping {
             if activeList != nil {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button {
-                            showingGenerateConfirm = true
+                    if isConsolidating {
+                        ProgressView()
+                    } else {
+                        Menu {
+                            Button {
+                                Task { await consolidateList() }
+                            } label: {
+                                Label("AIで整理（重複統合）", systemImage: "sparkles")
+                            }
+                            Divider()
+                            Button {
+                                showingGenerateConfirm = true
+                            } label: {
+                                Label("再生成", systemImage: "arrow.clockwise")
+                            }
+                            Button(role: .destructive) {
+                                if let list = activeList { context.delete(list) }
+                            } label: {
+                                Label("削除", systemImage: "trash")
+                            }
                         } label: {
-                            Label("再生成", systemImage: "arrow.clockwise")
+                            Image(systemName: "ellipsis.circle")
                         }
-                        Button(role: .destructive) {
-                            if let list = activeList { context.delete(list) }
-                        } label: {
-                            Label("削除", systemImage: "trash")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
                     }
                 }
             }
@@ -119,7 +149,47 @@ struct ShoppingListView: View {
         guard let plan = confirmedPlans.first else { return }
         if let existing = activeList { context.delete(existing) }
         let engine = MealPlanEngine()
-        _ = engine.generateShoppingList(from: plan, context: context, aliases: aliases)
+        _ = engine.generateShoppingList(
+            from: plan,
+            context: context,
+            aliases: aliases,
+            familySize: familySize
+        )
+    }
+
+    @MainActor
+    private func consolidateList() async {
+        guard let list = activeList, !list.items.isEmpty else { return }
+        isConsolidating = true
+        consolidationError = nil
+        defer { isConsolidating = false }
+
+        do {
+            let output = try await LLMPlanGenerator.shared.consolidateShoppingList(
+                items: list.items,
+                familySize: familySize
+            )
+            guard !output.items.isEmpty else { return }
+
+            // 既存アイテムを削除して統合結果で置き換え
+            list.items.forEach { context.delete($0) }
+            list.items.removeAll()
+
+            for consolidated in output.items {
+                let category = IngredientCategory(rawValue: consolidated.category) ?? .other
+                let item = ShoppingItem(
+                    name: consolidated.name,
+                    totalAmount: consolidated.amount,
+                    unit: consolidated.unit,
+                    category: category
+                )
+                context.insert(item)
+                list.items.append(item)
+            }
+            list.items.sort { $0.category.rawValue < $1.category.rawValue }
+        } catch {
+            consolidationError = error.localizedDescription
+        }
     }
 }
 

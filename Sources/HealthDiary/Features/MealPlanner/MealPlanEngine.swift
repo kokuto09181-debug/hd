@@ -156,7 +156,8 @@ final class MealPlanEngine {
     func generateShoppingList(
         from plan: MealPlan,
         context: ModelContext,
-        aliases: [IngredientAlias] = []
+        aliases: [IngredientAlias] = [],
+        familySize: Int = 2
     ) -> ShoppingList {
         let list = ShoppingList(mealPlanID: plan.id)
         context.insert(list)
@@ -183,17 +184,24 @@ final class MealPlanEngine {
                         ?? RecipeDatabase.shared.searchByName(dishName)?.id
 
                     if let recipeID = resolvedID {
+                        // レシピの基準人数を取得して家族人数でスケール
+                        let servingSize = RecipeDatabase.shared.fetchServingSize(for: recipeID)
+                        let multiplier = familySize > 0
+                            ? Double(familySize) / Double(max(1, servingSize))
+                            : 1.0
+
                         let ingredients = RecipeDatabase.shared.fetchIngredients(for: recipeID)
                         for ing in ingredients {
                             let canonical = normService.normalize(ing.name, aliases: aliases)
                             let key = "\(canonical)_\(ing.unit)"
+                            let scaledAmount = ing.amount * multiplier
                             if aggregated[key] != nil {
-                                aggregated[key]!.totalAmount += ing.amount
+                                aggregated[key]!.totalAmount += scaledAmount
                                 aggregated[key]!.usedInRecipes.insert(dishName)
                             } else {
                                 aggregated[key] = AggregatedIngredient(
                                     name: canonical,
-                                    totalAmount: ing.amount,
+                                    totalAmount: scaledAmount,
                                     unit: ing.unit,
                                     category: ing.category,
                                     usedInRecipes: [dishName]

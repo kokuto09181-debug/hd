@@ -12,6 +12,26 @@ struct MealPlanOutput {
     var days: [DayMealOutput]
 }
 
+// MARK: - 買い出しリスト統合用の構造化出力型
+
+@Generable
+struct ConsolidatedShoppingItem {
+    @Guide(description: "食材の標準的な名称（例: 長ねぎ、醤油、鶏もも肉）")
+    var name: String
+    @Guide(description: "合計量を表す数値。量が不明な場合は 0")
+    var amount: Double
+    @Guide(description: "単位（g / ml / 個 / 本 / 枚 / 大さじ / 小さじ など）。単位がない場合は空文字")
+    var unit: String
+    @Guide(description: "カテゴリ。肉類・魚介類・野菜類・果物・乳製品・卵・乾物・豆類・調味料・油・缶詰・瓶詰・冷凍食品・飲料・パン・穀物・菓子・甘味・その他 のいずれか")
+    var category: String
+}
+
+@Generable
+struct ConsolidatedShoppingOutput {
+    @Guide(description: "統合・整理された買い物リスト。重複・分散した食材をまとめ、量を合算したもの")
+    var items: [ConsolidatedShoppingItem]
+}
+
 @Generable
 struct DayMealOutput {
     @Guide(description: "日付 YYYY-MM-DD形式")
@@ -433,6 +453,37 @@ final class LLMPlanGenerator {
         let idx = Calendar.current.component(.weekday, from: date) % menus.count
         let (b, l, d) = menus[idx]
         return DayMealOutput(date: fmt.string(from: date), breakfast: b, lunch: l, dinner: d, snack: nil)
+    }
+
+    // MARK: - 買い出しリスト AI 統合
+
+    /// 同一食材が異なる単位で分散しているリストを LLM で統合する。
+    /// シミュレーターでは LLMError.simulatorUnsupported を throw する。
+    func consolidateShoppingList(
+        items: [ShoppingItem],
+        familySize: Int
+    ) async throws -> ConsolidatedShoppingOutput {
+        let lines = items.map { item -> String in
+            let amtStr = item.totalAmount > 0
+                ? "\(item.totalAmount.formatted(.number.precision(.fractionLength(0...2))))\(item.unit)"
+                : item.unit
+            return "・\(item.name): \(amtStr)（使用レシピ: \(item.usedInRecipes.joined(separator: "、"))）"
+        }.joined(separator: "\n")
+
+        let prompt = """
+        以下は\(familySize)人家族の献立から生成した買い物リストです。
+        同一食材で単位が異なるもの（例: ネギ 1本 と ネギ 3cm）を1つにまとめてください。
+        量の変換・合算が可能なものは合算し、変換できない場合は一般的な購入単位を採用してください。
+        食材名は一般的な表記（漢字・平仮名）に統一してください。
+
+        \(lines)
+        """
+
+        return try await LLMService.shared.generate(
+            prompt: prompt,
+            context: .shoppingConsolidation(familySize: familySize),
+            generating: ConsolidatedShoppingOutput.self
+        )
     }
 
     // MARK: - Helpers

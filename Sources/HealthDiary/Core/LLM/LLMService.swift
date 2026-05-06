@@ -127,6 +127,8 @@ final class LLMService: ObservableObject {
               {"date":"\(d1)","breakfast":"卵焼き","lunch":"うどん","dinner":"肉じゃが"}
             ]}
             """
+        case .shoppingConsolidation:
+            return "（シミュレーター）買い物リストの整理結果がここに表示されます。"
         default:
             return "（シミュレーター）Apple Intelligenceの返答がここに表示されます。"
         }
@@ -151,6 +153,8 @@ final class LLMService: ObservableObject {
             return "食事・健康管理アプリのアシスタントです。日本語で簡潔に答えます。"
         case .foodAnalysis:
             return "食事の画像認識結果から日本語の料理名と推定カロリーを答えてください。回答形式: 料理名|推定カロリー(kcal)　例: 炒飯|550"
+        case .shoppingConsolidation(let familySize):
+            return "\(familySize)人家族の買い物リスト整理アシスタントです。同じ食材を単位を考慮してまとめ、量を正確に計算します。"
         }
     }
 
@@ -219,4 +223,5 @@ enum LLMContext {
     case health
     case free
     case foodAnalysis
+    case shoppingConsolidation(familySize: Int)
 }
