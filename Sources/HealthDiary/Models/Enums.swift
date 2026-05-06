@@ -15,7 +15,7 @@ enum MealOption: String, Codable {
 
 enum MealPlanStatus: String, Codable {
     case draft = "draft"
-    case shopping = "shopping"  // 買い出し済み（旧 .confirmed）
+    case shopping = "shopping"
 
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -70,37 +70,8 @@ enum AgeGroup: String, Codable, CaseIterable {
     case infant = "乳幼児"
 }
 
-enum FoodLogSource: String, Codable {
-    case recipe = "レシピから"
-    case photo = "写真から"
-    case manual = "手動入力"
-}
-
-enum WorkoutType: String, Codable, CaseIterable {
-    case running = "ランニング"
-    case walking = "ウォーキング"
-    case cycling = "サイクリング"
-    case swimming = "水泳"
-    case strength = "筋トレ"
-    case yoga = "ヨガ"
-    case other = "その他"
-}
-
-enum ChatContext: String, Codable {
-    case recipe = "レシピ"
-    case mealPlan = "献立"
-    case leftover = "残り物"
-    case health = "健康相談"
-    case free = "自由相談"
-}
-
-enum ChatRole: String, Codable {
-    case user
-    case assistant
-}
-
 enum PantrySource: String, Codable {
-    case shopping = "買い出しから"   // 買い出しチェック時に自動追加
-    case manual = "手動"             // ユーザーが直接追加
-    case leftover = "残り物"         // 残り物として記録
+    case shopping = "買い出しから"
+    case manual = "手動"
+    case leftover = "残り物"
 }

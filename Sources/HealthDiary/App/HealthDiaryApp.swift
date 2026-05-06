@@ -3,11 +3,7 @@ import SwiftData
 
 @main
 struct HealthDiaryApp: App {
-    @AppStorage("onboarding_completed") private var onboardingCompleted = false
-    @State private var showOnboarding = false
 
-    // ModelContainer をここで生成することで、スキーマ変更時の
-    // マイグレーション失敗をキャッチして旧ストアを削除できる
     let container: ModelContainer
 
     init() {
@@ -17,16 +13,6 @@ struct HealthDiaryApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .onAppear {
-                    if !onboardingCompleted {
-                        showOnboarding = true
-                    }
-                    // Apple Intelligence はオンデバイスで動作するため
-                    // 起動時のモデルダウンロードは不要
-                }
-                .fullScreenCover(isPresented: $showOnboarding) {
-                    OnboardingView(isPresented: $showOnboarding)
-                }
         }
         .modelContainer(container)
     }
@@ -42,11 +28,6 @@ struct HealthDiaryApp: App {
         MealHistoryEntry.self,
         ShoppingList.self,
         ShoppingItem.self,
-        FoodLogEntry.self,
-        ActivityGoal.self,
-        ManualWorkout.self,
-        ChatThread.self,
-        ChatMessage.self,
         PantryItem.self,
         IngredientAlias.self,
     ]
@@ -54,13 +35,11 @@ struct HealthDiaryApp: App {
     private static func makeContainer() -> ModelContainer {
         let schema = Schema(allModels)
 
-        // 1回目: 通常起動を試みる
         if let container = try? ModelContainer(for: schema) {
             return container
         }
 
-        // マイグレーション失敗 — 旧ストアをすべて削除して再作成
-        // (開発中はデータ損失を許容する。将来はマイグレーションプランで対応)
+        // マイグレーション失敗時は旧ストアを削除して再作成
         purgeStores()
         do {
             return try ModelContainer(for: schema)
@@ -69,21 +48,16 @@ struct HealthDiaryApp: App {
         }
     }
 
-    /// SwiftData のストアファイルをすべて削除する
     private static func purgeStores() {
         let fm = FileManager.default
         let supportDir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let storeExtensions = ["sqlite", "sqlite-wal", "sqlite-shm"]
-
-        // SwiftData はデフォルトで "default.store" というファイル名を使う
-        for ext in storeExtensions {
+        let exts = ["sqlite", "sqlite-wal", "sqlite-shm"]
+        for ext in exts {
             let url = supportDir.appendingPathComponent("default.store").appendingPathExtension(ext)
             try? fm.removeItem(at: url)
         }
-
-        // フォルダ内の .sqlite 系ファイルも念のため掃除
         if let contents = try? fm.contentsOfDirectory(at: supportDir, includingPropertiesForKeys: nil) {
-            for file in contents where storeExtensions.contains(file.pathExtension) {
+            for file in contents where exts.contains(file.pathExtension) {
                 try? fm.removeItem(at: file)
             }
         }
