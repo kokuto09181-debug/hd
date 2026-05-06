@@ -84,10 +84,10 @@ final class IngredientNormalizationService {
         """
         guard let canonical = try? await LLMService.shared.generate(
             prompt: prompt,
-            context: .free
+            context: .shoppingConsolidation(familySize: 1)
         ) else { return raw }
 
-        let trimmed = canonical.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = canonical.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
         if !trimmed.isEmpty && trimmed != raw {
             learnAlias(alias: raw, canonical: trimmed, context: modelContext)
             return trimmed
