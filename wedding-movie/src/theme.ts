@@ -14,7 +14,16 @@ export const theme = {
 } as const;
 
 /**
- * 式場のプロジェクタは画面の端を数%切り落とすことがある。
- * 文字はこの内側にだけ置く。
+ * 式場のプロジェクタは画面の上下左右 5〜10% を切り落とすことがある。
+ * 業界の目安は「文字は端から 10〜15% 空ける」なので、
+ * 文字はタイトルセーフ(10%)の内側、写真はアクションセーフ(5%)の内側に置く。
  */
-export const SAFE_AREA_PERCENT = 6;
+export const SAFE_AREA_PERCENT = 10;
+export const ACTION_SAFE_PERCENT = 5;
+
+/**
+ * CSS の % パディングは上下も「幅」を基準にしてしまうので、
+ * 縦と横をそれぞれの辺から計算して px で返す。
+ */
+export const safePadding = (width: number, height: number, percent: number) =>
+  `${(height * percent) / 100}px ${(width * percent) / 100}px`;

@@ -8,6 +8,7 @@
     "studio": "remotion studio",
     "scaffold": "node scripts/scaffold.mjs",
     "demo-photos": "node scripts/make-demo-photos.mjs",
+    "check": "node scripts/check.mjs",
     "render": "node scripts/render.mjs",
     "still": "node scripts/still.mjs",
     "typecheck": "tsc --noEmit"

@@ -1,6 +1,6 @@
 import React from 'react';
 import {AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig} from 'remotion';
-import {SAFE_AREA_PERCENT, theme} from '../theme';
+import {SAFE_AREA_PERCENT, safePadding, theme} from '../theme';
 import type {MovieConfig} from '../types';
 import {Backdrop} from './Backdrop';
 import {Diamond, Rule} from './Ornament';
@@ -35,7 +35,7 @@ export const TitleCard: React.FC<{
     <Backdrop>
       <AbsoluteFill
         style={{
-          padding: `${SAFE_AREA_PERCENT}%`,
+          padding: safePadding(width, height, SAFE_AREA_PERCENT),
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',

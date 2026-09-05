@@ -8,7 +8,7 @@
   },
 
   "transitionInSeconds": 0.8,
-  "defaultPhotoDurationInSeconds": 6,
+  "defaultPhotoDurationInSeconds": 7,
 
   "opening": {
     "label": "Profile Movie",
@@ -53,7 +53,7 @@
         {
           "src": "photos/01_groom/06.png",
           "label": "2007 / 中学時代",
-          "caption": "野球はここでも続けました\n日焼けだけは誰にも負けません"
+          "caption": "野球はここでも続けました\n日焼けだけは負けません"
         },
         {
           "src": "photos/01_groom/07.png",
@@ -68,12 +68,12 @@
         {
           "src": "photos/01_groom/09.png",
           "label": "2017 / 社会人",
-          "caption": "スーツを着る日々が始まりました\n先輩方に育てていただきました"
+          "caption": "スーツを着る日々の始まり\n先輩方に育てられました"
         },
         {
           "src": "photos/01_groom/10.png",
           "label": "2024 / 現在",
-          "caption": "たくさんの出会いに支えられ\n今日という日を迎えました"
+          "caption": "たくさんの出会いに支えられて\n今日を迎えました"
         }
       ]
     },
@@ -96,7 +96,7 @@
         {
           "src": "photos/02_bride/03.png",
           "label": "2001 / 5歳",
-          "caption": "ピアノを習い始めました\n発表会は緊張で手が震えました"
+          "caption": "ピアノを習い始めました\n発表会は緊張で震えました"
         },
         {
           "src": "photos/02_bride/04.png",
@@ -106,7 +106,7 @@
         {
           "src": "photos/02_bride/05.png",
           "label": "2006 / 10歳",
-          "caption": "家族旅行が毎年の楽しみ\nこの頃の写真が一番多いそうです"
+          "caption": "家族旅行が毎年の楽しみ\nこの頃の写真が一番多いです"
         },
         {
           "src": "photos/02_bride/06.png",
@@ -164,7 +164,7 @@
         {
           "src": "photos/03_together/05.png",
           "label": "2024 / プロポーズ",
-          "caption": "何度も練習した言葉は\n結局ひとつも出てきませんでした"
+          "caption": "何度も練習した言葉は\n結局ひとつも出ませんでした"
         },
         {
           "src": "photos/03_together/06.png",

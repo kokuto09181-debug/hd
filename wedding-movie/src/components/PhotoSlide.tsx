@@ -8,7 +8,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from 'remotion';
-import {SAFE_AREA_PERCENT, theme} from '../theme';
+import {ACTION_SAFE_PERCENT, SAFE_AREA_PERCENT, safePadding, theme} from '../theme';
 import type {PhotoEntry} from '../types';
 import {useImageAspect} from './useImageAspect';
 
@@ -89,8 +89,12 @@ export const PhotoSlide: React.FC<{
   index: number;
 }> = ({photo, durationInFrames, index}) => {
   const frame = useCurrentFrame();
-  const {fps, height} = useVideoConfig();
+  const {fps, height, width} = useVideoConfig();
   const src = staticFile(photo.src);
+
+  // 写真は多少切れても致命傷ではないので 5%、文字は切れると読めないので 10% の内側に置く
+  const textInsetX = (width * (SAFE_AREA_PERCENT - ACTION_SAFE_PERCENT)) / 100;
+  const textInsetY = (height * (SAFE_AREA_PERCENT - ACTION_SAFE_PERCENT)) / 100;
   const aspect = useImageAspect(src);
 
   // ケン・バーンズ。止め絵に見せないための、気づかない程度のゆっくりした寄り。
@@ -144,7 +148,7 @@ export const PhotoSlide: React.FC<{
       {aspect === null ? null : isPortrait && hasText ? (
         <AbsoluteFill
           style={{
-            padding: `${SAFE_AREA_PERCENT}%`,
+            padding: safePadding(width, height, ACTION_SAFE_PERCENT),
             display: 'flex',
             flexDirection: photoOnLeft ? 'row' : 'row-reverse',
             alignItems: 'center',
@@ -163,14 +167,25 @@ export const PhotoSlide: React.FC<{
           >
             {image}
           </div>
-          <div style={{flex: 1, minWidth: 0}}>
+          <div
+            style={{
+              flex: 1,
+              minWidth: 0,
+              // 画面の外側にあたる辺だけ、タイトルセーフまで余白を足す
+              paddingRight: photoOnLeft ? textInsetX : 0,
+              paddingLeft: photoOnLeft ? 0 : textInsetX,
+              paddingBlock: textInsetY,
+            }}
+          >
             <Caption photo={photo} align="left" progress={captionIn} />
           </div>
         </AbsoluteFill>
       ) : (
         <AbsoluteFill
           style={{
-            padding: `${SAFE_AREA_PERCENT * 0.7}% ${SAFE_AREA_PERCENT}%`,
+            padding: `${(height * ACTION_SAFE_PERCENT) / 100}px ${
+              (width * ACTION_SAFE_PERCENT) / 100
+            }px ${(height * SAFE_AREA_PERCENT) / 100}px`,
             display: 'flex',
             flexDirection: 'column',
           }}
