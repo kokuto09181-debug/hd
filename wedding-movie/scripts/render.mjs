@@ -1,4 +1,6 @@
-// mp4 を書き出す。BGM は後から編集ソフトで載せる前提なので、音声は入れていない。
+// mp4 を書き出す。BGM は後から載せる前提なので、中身は無音。
+// ただし音声トラック自体は残している（会場のプレイヤーやDVDオーサリングが
+// 音声トラックの無いファイルでつまずくことがあるため）。外すなら --muted。
 import {spawnSync} from 'node:child_process';
 import {existsSync} from 'node:fs';
 import {dirname, join} from 'node:path';
@@ -28,6 +30,9 @@ const result = spawnSync(
     '--codec=h264',
     // 会場のプレイヤーでも確実に再生できる、素直な H.264 + yuv420p にしておく
     '--pixel-format=yuv420p',
+    // これを付けないとフルレンジ(yuvj420p)で出てしまい、
+    // テレビレンジ前提のプレイヤーやプロジェクタでは色が浅く/潰れて見える
+    '--color-space=bt709',
     '--crf=18',
     ...(browser ? [`--browser-executable=${browser}`] : []),
     ...passthrough,
