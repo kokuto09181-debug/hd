@@ -1,0 +1,199 @@
+{
+  "_readme": "ここを書き換えるだけでムービーが変わります。写真は public/ からの相対パスで指定してください。",
+
+  "video": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30
+  },
+
+  "transitionInSeconds": 0.8,
+  "defaultPhotoDurationInSeconds": 6,
+
+  "opening": {
+    "label": "Profile Movie",
+    "names": "太郎 & 花子",
+    "title": "本日はお集まりいただき\nありがとうございます",
+    "date": "2026.11.03",
+    "durationInSeconds": 7
+  },
+
+  "sections": [
+    {
+      "label": "Groom",
+      "title": "新郎 太郎 の生い立ち",
+      "subtitle": "1994年5月20日生まれ",
+      "cardDurationInSeconds": 4.5,
+      "photos": [
+        {
+          "src": "photos/01_groom/01.png",
+          "label": "1994.5.20",
+          "caption": "3200gの元気な男の子として\n生まれました"
+        },
+        {
+          "src": "photos/01_groom/02.png",
+          "label": "1996 / 2歳",
+          "caption": "とにかくよく食べ、よく笑う子でした"
+        },
+        {
+          "src": "photos/01_groom/03.png",
+          "label": "1999 / 5歳",
+          "caption": "妹が生まれて、お兄ちゃんになりました"
+        },
+        {
+          "src": "photos/01_groom/04.png",
+          "label": "2001 / 小学校入学",
+          "caption": "ランドセルが大きすぎて\n歩くのが大変でした"
+        },
+        {
+          "src": "photos/01_groom/05.png",
+          "label": "2004 / 10歳",
+          "caption": "少年野球に夢中の毎日\n背番号は「5」でした"
+        },
+        {
+          "src": "photos/01_groom/06.png",
+          "label": "2007 / 中学時代",
+          "caption": "野球はここでも続けました\n日焼けだけは誰にも負けません"
+        },
+        {
+          "src": "photos/01_groom/07.png",
+          "label": "2010 / 高校時代",
+          "caption": "友達に恵まれた3年間\n今でも一番集まる仲間です"
+        },
+        {
+          "src": "photos/01_groom/08.png",
+          "label": "2013 / 大学時代",
+          "caption": "初めての一人暮らし\n家事のありがたみを知りました"
+        },
+        {
+          "src": "photos/01_groom/09.png",
+          "label": "2017 / 社会人",
+          "caption": "スーツを着る日々が始まりました\n先輩方に育てていただきました"
+        },
+        {
+          "src": "photos/01_groom/10.png",
+          "label": "2024 / 現在",
+          "caption": "たくさんの出会いに支えられ\n今日という日を迎えました"
+        }
+      ]
+    },
+    {
+      "label": "Bride",
+      "title": "新婦 花子 の生い立ち",
+      "subtitle": "1996年8月8日生まれ",
+      "cardDurationInSeconds": 4.5,
+      "photos": [
+        {
+          "src": "photos/02_bride/01.png",
+          "label": "1996.8.8",
+          "caption": "家族みんなが待ちわびた\n第一子として生まれました"
+        },
+        {
+          "src": "photos/02_bride/02.png",
+          "label": "1998 / 2歳",
+          "caption": "人見知りゼロ\n誰にでも話しかける子でした"
+        },
+        {
+          "src": "photos/02_bride/03.png",
+          "label": "2001 / 5歳",
+          "caption": "ピアノを習い始めました\n発表会は緊張で手が震えました"
+        },
+        {
+          "src": "photos/02_bride/04.png",
+          "label": "2003 / 小学校入学",
+          "caption": "友達をつくるのが得意な\n元気いっぱいの1年生でした"
+        },
+        {
+          "src": "photos/02_bride/05.png",
+          "label": "2006 / 10歳",
+          "caption": "家族旅行が毎年の楽しみ\nこの頃の写真が一番多いそうです"
+        },
+        {
+          "src": "photos/02_bride/06.png",
+          "label": "2009 / 中学時代",
+          "caption": "吹奏楽部でフルートを担当\n朝練の日々でした"
+        },
+        {
+          "src": "photos/02_bride/07.png",
+          "label": "2012 / 高校時代",
+          "caption": "放課後の寄り道が青春でした"
+        },
+        {
+          "src": "photos/02_bride/08.png",
+          "label": "2015 / 大学時代",
+          "caption": "初めての海外旅行\n世界の広さに驚きました"
+        },
+        {
+          "src": "photos/02_bride/09.png",
+          "label": "2019 / 社会人",
+          "caption": "働く楽しさと大変さを\n少しずつ知りました"
+        },
+        {
+          "src": "photos/02_bride/10.png",
+          "label": "2024 / 現在",
+          "caption": "支えてくれた家族と友人に\n心から感謝しています"
+        }
+      ]
+    },
+    {
+      "label": "Our Story",
+      "title": "ふたりのこと",
+      "subtitle": "出会いから今日まで",
+      "cardDurationInSeconds": 4.5,
+      "photos": [
+        {
+          "src": "photos/03_together/01.png",
+          "label": "2021 / 出会い",
+          "caption": "共通の友人の紹介で出会いました"
+        },
+        {
+          "src": "photos/03_together/02.png",
+          "label": "2021 / 初デート",
+          "caption": "緊張しすぎて、何を話したか\nお互い覚えていません"
+        },
+        {
+          "src": "photos/03_together/03.png",
+          "label": "2022 / 初めての旅行",
+          "caption": "はしゃぎすぎて、帰りは\nふたりとも寝ていました"
+        },
+        {
+          "src": "photos/03_together/04.png",
+          "label": "2023 / 一緒に暮らし始める",
+          "caption": "料理は彼女、洗い物は彼\n自然とそうなりました"
+        },
+        {
+          "src": "photos/03_together/05.png",
+          "label": "2024 / プロポーズ",
+          "caption": "何度も練習した言葉は\n結局ひとつも出てきませんでした"
+        },
+        {
+          "src": "photos/03_together/06.png",
+          "label": "2025 / 両家顔合わせ",
+          "caption": "あたたかく迎えてくださった\nご両親に感謝しています"
+        },
+        {
+          "src": "photos/03_together/07.png",
+          "label": "2026 / 前撮り",
+          "caption": "この日を楽しみに\n準備を進めてきました"
+        },
+        {
+          "src": "photos/03_together/08.png",
+          "label": "2026.11.03",
+          "caption": "そして今日、\nここから一緒に歩いていきます"
+        }
+      ]
+    }
+  ],
+
+  "ending": {
+    "label": "Thank You",
+    "lines": [
+      "ここまでご覧いただき\nありがとうございました",
+      "皆さまに支えられて\n今日という日を迎えることができました",
+      "未熟なふたりですが\nこれからもよろしくお願いいたします"
+    ],
+    "signature": "太郎 & 花子",
+    "date": "2026.11.03",
+    "durationInSeconds": 14
+  }
+}

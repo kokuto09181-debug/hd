@@ -1,0 +1,19 @@
+node_modules/
+out/
+.remotion/
+
+# ふたりの写真は絶対にコミットしない（プライバシー保護）
+public/photos/**/*.jpg
+public/photos/**/*.jpeg
+public/photos/**/*.png
+public/photos/**/*.JPG
+public/photos/**/*.JPEG
+public/photos/**/*.PNG
+public/photos/**/*.heic
+public/photos/**/*.HEIC
+
+# フォントは npm run setup でダウンロードする
+public/fonts/*.ttf
+
+# scaffold の出力（作業用）
+movie.config.generated.json

@@ -1,0 +1,30 @@
+{
+  "name": "wedding-profile-movie",
+  "version": "1.0.0",
+  "private": true,
+  "description": "結婚式プロフィールムービー生成 (Remotion)",
+  "scripts": {
+    "setup": "node scripts/fetch-fonts.mjs",
+    "studio": "remotion studio",
+    "scaffold": "node scripts/scaffold.mjs",
+    "demo-photos": "node scripts/make-demo-photos.mjs",
+    "render": "node scripts/render.mjs",
+    "still": "node scripts/still.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.520",
+    "@remotion/fonts": "4.0.520",
+    "@remotion/google-fonts": "4.0.520",
+    "@remotion/media-utils": "4.0.520",
+    "@remotion/transitions": "4.0.520",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.520"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "typescript": "^5.8.3"
+  }
+}
