@@ -22,6 +22,8 @@ export type Section = {
 };
 
 export type MovieConfig = {
+  /** 見た目のテーマ。src/themes/ の id。省略時は classic */
+  theme?: string;
   video: {
     width: number;
     height: number;

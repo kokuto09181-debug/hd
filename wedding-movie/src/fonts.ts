@@ -1,5 +1,6 @@
 import {loadFont} from '@remotion/fonts';
 import {continueRender, delayRender, staticFile} from 'remotion';
+import {FONT_FILES} from './themes/font-files.mjs';
 
 /**
  * 書体は public/fonts に置いたローカルファイルから読む（`npm run setup` で取得）。
@@ -7,19 +8,13 @@ import {continueRender, delayRender, staticFile} from 'remotion';
  */
 const handle = delayRender('書体を読み込んでいます');
 
-const FONTS = [
-  {family: 'Zen Old Mincho', file: 'ZenOldMincho-Regular.ttf', weight: '400'},
-  {family: 'Zen Old Mincho', file: 'ZenOldMincho-SemiBold.ttf', weight: '600'},
-  {family: 'Zen Kaku Gothic New', file: 'ZenKakuGothicNew-Regular.ttf', weight: '400'},
-  {family: 'Cormorant Garamond', file: 'CormorantGaramond-Light.ttf', weight: '300'},
-];
-
 Promise.all(
-  FONTS.map(({family, file, weight}) =>
+  FONT_FILES.map(({css, file, weight, style}) =>
     loadFont({
-      family,
+      family: css,
       url: staticFile(`fonts/${file}`),
       weight,
+      style,
       format: 'truetype',
       display: 'block',
     }),

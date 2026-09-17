@@ -9,6 +9,8 @@
     "scaffold": "node scripts/scaffold.mjs",
     "demo-photos": "node scripts/make-demo-photos.mjs",
     "check": "node scripts/check.mjs",
+    "samples": "node scripts/render-samples.mjs",
+    "samples:stills": "node scripts/render-samples.mjs --stills && python3 scripts/contact-sheet.py && python3 scripts/scene-grids.py",
     "render": "node scripts/render.mjs",
     "still": "node scripts/still.mjs",
     "typecheck": "tsc --noEmit"

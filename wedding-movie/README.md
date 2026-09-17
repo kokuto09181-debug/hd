@@ -23,6 +23,48 @@ npm run render       # out/profile-movie.mp4 が出てくる
 
 ---
 
+## 見た目のテーマを選ぶ
+
+`movie.config.json` の `"theme"` を書き換えるだけで、色・書体・写真の額・コメントの位置・切り替え方・動き・飾りが丸ごと変わります。
+
+| id | 名前 | ひとこと |
+|---|---|---|
+| `classic` | クラシック | 生成りの紙に明朝体。落ち着いた王道 |
+| `cinema` | シネマ | 黒地に細い文字。映画のような静けさ |
+| `natural` | ナチュラル | 手書き風の文字と葉のあしらい。やわらかい |
+| `vintage` | ヴィンテージ | ポラロイドとフィルムの粒子。懐かしい |
+| `minimal` | ミニマル | 白に極細の文字。余白で見せる |
+| `pop` | ポップ | 丸い文字と明るい色。弾む |
+| `wa` | 和モダン | 和紙に藍と朱。縦書きの章扉 |
+| `editorial` | マガジン | 太い文字と大きな数字。雑誌の見開き |
+
+```jsonc
+{
+  "theme": "vintage",
+  ...
+}
+```
+
+### 見比べる
+
+```bash
+npm run samples:stills   # 全テーマの主要シーンを静止画で → out/samples/contact-sheet.png
+npm run samples          # 全テーマの短い抜粋(約27秒)を mp4 で → out/samples/<id>.mp4
+npm run samples -- wa pop   # 特定のテーマだけ
+```
+
+`npm run studio` を開くと、左のツリーの **Themes** に各テーマの本編、**Samples** に抜粋が並びます。
+
+### テーマを調整する・増やす
+
+テーマは `src/themes/<id>.ts` の1ファイルです。色や書体、写真の額（`shadow` / `polaroid` / `rounded` / `border` / `hairline` / `none`）、
+コメントの位置（`below` / `side-auto` / `side` / `overlay`）、切り替え（`fade` / `slide` / `wipe` / `clockWipe` / `iris`）、
+飾り（`rules` / `letterbox` / `grain` / `botanical` / `blobs` / `circle` / `grid` / `vignette`）を組み合わせます。
+新しいテーマは既存のファイルを複製して `src/themes/index.ts` に登録してください。
+書体を増やすときは `src/themes/font-files.mjs` に足して `npm run setup` を実行します。
+
+---
+
 ## 自分たちの内容にする
 
 ### 1. 写真を置く

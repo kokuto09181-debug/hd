@@ -1,6 +1,8 @@
 {
   "_readme": "ここを書き換えるだけでムービーが変わります。写真は public/ からの相対パスで指定してください。",
 
+  "theme": "classic",
+
   "video": {
     "width": 1920,
     "height": 1080,

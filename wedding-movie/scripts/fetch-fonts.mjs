@@ -3,19 +3,13 @@
 import {mkdir, writeFile, stat} from 'node:fs/promises';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {FONT_FILES} from '../src/themes/font-files.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, 'public', 'fonts');
 
-const FONTS = [
-  {file: 'ZenOldMincho-Regular.ttf', family: 'Zen+Old+Mincho', weight: 400},
-  {file: 'ZenOldMincho-SemiBold.ttf', family: 'Zen+Old+Mincho', weight: 600},
-  {file: 'ZenKakuGothicNew-Regular.ttf', family: 'Zen+Kaku+Gothic+New', weight: 400},
-  {file: 'CormorantGaramond-Light.ttf', family: 'Cormorant+Garamond', weight: 300},
-];
-
-const cssFor = async ({family, weight}) => {
-  const url = `https://fonts.googleapis.com/css2?family=${family}:wght@${weight}&display=swap`;
+const cssFor = async ({family, spec}) => {
+  const url = `https://fonts.googleapis.com/css2?family=${family}:${spec}&display=swap`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${family} の CSS 取得に失敗 (${res.status})`);
   const css = await res.text();
@@ -26,7 +20,8 @@ const cssFor = async ({family, weight}) => {
 
 await mkdir(outDir, {recursive: true});
 
-for (const font of FONTS) {
+let downloaded = 0;
+for (const font of FONT_FILES) {
   const dest = join(outDir, font.file);
   try {
     const s = await stat(dest);
@@ -42,7 +37,8 @@ for (const font of FONTS) {
   if (!res.ok) throw new Error(`${font.file} のダウンロードに失敗 (${res.status})`);
   const buf = Buffer.from(await res.arrayBuffer());
   await writeFile(dest, buf);
+  downloaded++;
   console.log(`saved ${font.file} (${(buf.length / 1024 / 1024).toFixed(1)}MB)`);
 }
 
-console.log('\nフォントの準備が完了しました。');
+console.log(`\nフォントの準備が完了しました（新規 ${downloaded} / 全 ${FONT_FILES.length}）。`);
